@@ -537,6 +537,9 @@ body{
 .brand-title{font-size:14px;color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .live{display:flex;align-items:center;gap:8px;color:var(--success);font-size:12px;white-space:nowrap;min-width:0;}
 .live-dot{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 10px var(--success);animation:pulse 1.6s infinite;}
+.top-actions{display:flex;align-items:center;gap:8px;white-space:nowrap;}
+.sound-btn,.refresh-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border2);background:rgba(15,21,40,.88);color:var(--brand);border-radius:999px;padding:5px 10px;font-size:12px;cursor:pointer;box-shadow:0 0 12px rgba(var(--brand-rgb),.12);white-space:nowrap;}
+.refresh-btn{background:rgba(0,229,255,.12);}
 .top-clock{text-align:right;}
 .top-date{font-size:12px;color:rgba(232,234,246,.72);white-space:nowrap;}
 .top-time{font-size:20px;letter-spacing:.16em;color:var(--brand);text-shadow:0 0 12px rgba(var(--brand-rgb),.45);font-weight:700;}
@@ -645,6 +648,7 @@ body{
 .map-label.e125{bottom:10px;left:25%}.map-label.e130{bottom:10px;left:50%;transform:translateX(-50%)}.map-label.e135{bottom:10px;right:78px}
 .map-actions{position:absolute;right:12px;bottom:12px;z-index:5;display:flex;gap:8px;}
 .btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border2);background:rgba(15,21,40,.88);color:var(--brand);border-radius:999px;padding:7px 12px;font-size:12px;text-decoration:none;cursor:pointer;box-shadow:0 0 12px rgba(var(--brand-rgb),.12);}
+.mobile-map-open{display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:6;min-width:220px;text-align:center;border:1px solid var(--border2);background:rgba(10,14,26,.90);color:var(--brand);border-radius:14px;padding:12px 16px;font-size:15px;font-weight:800;text-decoration:none;box-shadow:0 0 22px rgba(var(--brand-rgb),.28);}
 .chart-card{display:flex;flex-direction:column;}
 #tideChart{position:relative;z-index:2;flex:1;min-height:0;width:100%;border-radius:8px;background:radial-gradient(circle at 50% 50%,rgba(0,229,255,.08),transparent 42%),rgba(6,10,20,.58);border:1px solid rgba(0,229,255,.14);overflow:hidden;}
 #tideChart::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(0,229,255,.10),transparent);animation:chartAura 6s ease-in-out infinite;z-index:1;}
@@ -666,10 +670,15 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
 @media (max-width:1079px){
   html,body{overflow:auto}
   .app{height:auto;min-height:100vh}
+  .topbar{height:auto;min-height:56px;flex-wrap:wrap;gap:8px;padding:10px 14px}
+  .top-actions{order:3;width:100%;justify-content:center}
   .content{height:auto;display:block;overflow:visible}
   .row-main,.row-bottom{display:block}
   .card{margin:10px 0;min-height:220px}
   .map-card{min-height:520px}.chart-card{min-height:320px}
+  .map-shell{height:68vh;min-height:420px}
+  .mobile-map-open{display:block}
+  .map-actions{left:12px;right:12px;justify-content:center}
 }
 </style>
 </head>
@@ -681,6 +690,10 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
       <span class="brand-title">青岛第六海水浴场 · 实时监测大屏</span>
     </div>
     <div class="live"><span class="live-dot"></span><span>实时在线</span><span id="globalUpdate">数据更新 --</span></div>
+    <div class="top-actions">
+      <button id="refreshBtn" class="refresh-btn" onclick="refreshAllData()">刷新全部数据</button>
+      <button id="soundBtn" class="sound-btn" onclick="toggleSound()">🔇 声音关</button>
+    </div>
     <div class="top-clock"><div id="dateText" class="top-date">--</div><div id="nowTime" class="top-time">--:--:--</div></div>
   </header>
 
@@ -721,6 +734,7 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
           <span class="map-label e125">125°E</span>
           <span class="map-label e130">130°E</span>
           <span class="map-label e135">135°E</span>
+          <a class="mobile-map-open" href="https://www.bhyb.org.cn/typhoon/" target="_blank" rel="noopener">手机端打开台风图</a>
           <div class="map-actions">
             <button class="btn" onclick="reloadTyphoonFrame()">刷新图层</button>
             <a class="btn" href="https://www.bhyb.org.cn/typhoon/" target="_blank">浏览器打开</a>
@@ -784,7 +798,7 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
 </div>
 
 <script>
-let tideRawData=null, tideChart=null, lastChartRaw=null, lastChartSite=null, lastChartPoints=[], lastTideList=[], resizeTimer=null;
+let tideRawData=null, tideChart=null, lastChartRaw=null, lastChartSite=null, lastChartPoints=[], lastTideList=[], resizeTimer=null, lastTideRising=null, soundEnabled=false, audioCtx=null;
 const $=id=>document.getElementById(id);
 function setText(id,text){const el=$(id); if(el) el.textContent=(text===null||text===undefined||text==="")?"--":text;}
 function lunarText(d){
@@ -963,6 +977,8 @@ function calcTideStatus(list){
   }
   setText("tideBadge",rising?"涨潮中":"退潮中");
   setText("tideTrend",rising?"水位上升":"水位下降");
+  if(lastTideRising!==null&&rising&&!lastTideRising&&soundEnabled){playRisingSound();}
+  lastTideRising=rising;
   if(next){
     setText("tideStatusText",`下一次${next.type} ${next.time}，潮位 ${next.height} cm`);
     setText("nextTideDelta",formatDuration(next.min-nowMin));
@@ -990,6 +1006,28 @@ function calcTideStatus(list){
   setText("highDelta",nextHigh?formatDuration(nextHigh.min-nowMin):"今日无");
   setText("lowDelta",nextLow?formatDuration(nextLow.min-nowMin):"今日无");
   renderTideSummary(pts);
+}
+function initAudio(){
+  if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+}
+function playRisingSound(){
+  try{
+    initAudio();
+    if(audioCtx.state==="suspended") audioCtx.resume();
+    const t=audioCtx.currentTime;
+    const osc1=audioCtx.createOscillator(); const g1=audioCtx.createGain();
+    osc1.type="sine"; osc1.frequency.setValueAtTime(523,t); osc1.frequency.exponentialRampToValueAtTime(784,t+0.15);
+    g1.gain.setValueAtTime(0.08,t); g1.gain.exponentialRampToValueAtTime(0.001,t+0.5);
+    osc1.connect(g1); g1.connect(audioCtx.destination); osc1.start(t); osc1.stop(t+0.5);
+    const osc2=audioCtx.createOscillator(); const g2=audioCtx.createGain();
+    osc2.type="sine"; osc2.frequency.setValueAtTime(659,t+0.18); osc2.frequency.exponentialRampToValueAtTime(1047,t+0.35);
+    g2.gain.setValueAtTime(0.06,t+0.18); g2.gain.exponentialRampToValueAtTime(0.001,t+0.65);
+    osc2.connect(g2); g2.connect(audioCtx.destination); osc2.start(t+0.18); osc2.stop(t+0.65);
+  }catch(e){}
+}
+function toggleSound(){
+  soundEnabled=!soundEnabled; initAudio();
+  const btn=$("soundBtn"); if(btn) btn.textContent=soundEnabled?"🔊 声音开":"🔇 声音关";
 }
 function formatDuration(minutes){
   if(minutes===null||minutes===undefined||minutes<0)return "--";
@@ -1040,6 +1078,18 @@ async function loadWeather(){try{const r=await fetchJSON("/api/weather"); if(r&&
 async function loadWave(){try{const r=await fetchJSON("/api/wave"); if(r&&r.data)renderWave(r.data,r.updateTime);}catch(e){}}
 async function loadTide(){try{const r=await fetchJSON("/api/tide"); if(r&&r.data)renderTide(r,r.updateTime);}catch(e){$("mainBox").innerHTML="潮汐数据加载失败";}}
 async function loadChart(){try{const r=await fetchJSON("/api/tideChart"); renderChart(r.chart,r.msg,r.site);}catch(e){renderChart([],"潮汐曲线加载失败",null);}}
+async function refreshAllData(){
+  const btn=$("refreshBtn");
+  if(btn){btn.disabled=true;btn.textContent="刷新中...";}
+  try{
+    await Promise.allSettled([loadTide(),loadChart(),loadWeather(),loadWave()]);
+    reloadTyphoonFrame();
+    if(btn)btn.textContent="刷新完成";
+    setTimeout(()=>{if(btn){btn.textContent="刷新全部数据";btn.disabled=false;}},1200);
+  }catch(e){
+    if(btn){btn.textContent="刷新失败";setTimeout(()=>{btn.textContent="刷新全部数据";btn.disabled=false;},1600);}
+  }
+}
 function boot(){
   updateClock(); setInterval(updateClock,1000);
   loadTide(); loadChart(); loadWeather(); loadWave();
