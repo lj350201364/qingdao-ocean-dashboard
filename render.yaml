@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: qingdao-ocean-dashboard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python OceanWindow_optimized.py --server
+    envVars:
+      - key: SERVER_MODE
+        value: "1"
