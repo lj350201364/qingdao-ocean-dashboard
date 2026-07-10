@@ -55,10 +55,9 @@ def _now():
 
 def now_hm(target_date=None):
     n = _now()
-    if target_date:
+    if target_date and target_date != today_ymd():
         try:
             parts = target_date.split("-")
-            # 明日数据只显示日期，不显示时间，避免误解
             return f"{int(parts[1]):02d}-{int(parts[2]):02d} 数据"
         except Exception:
             pass
@@ -747,9 +746,11 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
   .brand{width:100%;justify-content:center;gap:6px}
   .brand-code{font-size:11px;letter-spacing:.12em}
   .brand-title{font-size:11px;max-width:68vw}
-  .live{order:1;flex:1 1 0%;justify-content:center;font-size:11px;gap:6px}
-  .top-actions{order:2;flex:1 1 0%;justify-content:center;gap:6px}
-  .sound-btn,.refresh-btn,.day-btn{font-size:11px;padding:4px 8px;min-width:64px;justify-content:center}
+  .live{order:1;width:100%;justify-content:center;font-size:11px;gap:6px}
+  .top-actions{order:2;width:100%;justify-content:center;gap:6px;flex-wrap:wrap}
+  .sound-btn,.refresh-btn,.day-btn{font-size:11px;padding:4px 8px;min-width:0;justify-content:center}
+  .sound-btn span{display:none}
+  .refresh-btn{min-width:auto}
   .top-clock{order:3;width:100%;text-align:center}
   .top-date{font-size:11px;white-space:normal;line-height:1.2}
   .top-time{font-size:22px;letter-spacing:.10em;line-height:1.05;margin-top:1px}
@@ -775,8 +776,8 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
     <div class="top-actions">
       <button id="todayBtn" class="day-btn active" onclick="switchForecastDay(0)">今日</button>
       <button id="tomorrowBtn" class="day-btn" onclick="switchForecastDay(1)">明日</button>
-      <button id="refreshBtn" class="refresh-btn" onclick="refreshAllData()">刷新全部数据</button>
-      <button id="soundBtn" class="sound-btn" onclick="toggleSound()">🔇 声音关</button>
+      <button id="refreshBtn" class="refresh-btn" onclick="refreshAllData()">🔄 刷新</button>
+      <button id="soundBtn" class="sound-btn" onclick="toggleSound()">🔇 <span>声音关</span></button>
     </div>
     <div class="top-clock"><div id="dateText" class="top-date">--</div><div id="nowTime" class="top-time">--:--:--</div></div>
   </header>
@@ -1145,7 +1146,9 @@ function playRisingSound(){
 }
 function toggleSound(){
   soundEnabled=!soundEnabled; initAudio();
-  const btn=$("soundBtn"); if(btn) btn.textContent=soundEnabled?"🔊 声音开":"🔇 声音关";
+  const btn=$("soundBtn"); if(btn){
+    btn.innerHTML=soundEnabled?'🔊 <span>声音开</span>':'🔇 <span>声音关</span>';
+  }
 }
 function formatDuration(minutes){
   if(minutes===null||minutes===undefined||minutes<0)return "--";
@@ -1227,9 +1230,9 @@ async function refreshAllData(){
     await Promise.allSettled([loadTide(),loadChart(),loadWeather(),loadWave()]);
     reloadTyphoonFrame();
     if(btn)btn.textContent="刷新完成";
-    setTimeout(()=>{if(btn){btn.textContent="刷新全部数据";btn.disabled=false;}},1200);
+    setTimeout(()=>{if(btn){btn.textContent="🔄 刷新";btn.disabled=false;}},1200);
   }catch(e){
-    if(btn){btn.textContent="刷新失败";setTimeout(()=>{btn.textContent="刷新全部数据";btn.disabled=false;},1600);}
+    if(btn){btn.textContent="刷新失败";setTimeout(()=>{btn.textContent="🔄 刷新";btn.disabled=false;},1600);}
   }
 }
 function boot(){
