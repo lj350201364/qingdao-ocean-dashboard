@@ -9,6 +9,7 @@ import socketserver
 import sys
 import threading
 import time
+import datetime
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -44,12 +45,45 @@ cache = {
 }
 
 
-def now_hm():
-    return time.strftime("%H:%M", time.localtime())
+def _tz():
+    """固定返回 Asia/Shanghai 时区，避免服务器时区不一致。"""
+    return datetime.timezone(datetime.timedelta(hours=8))
+
+def _now():
+    return datetime.datetime.now(_tz())
+
+
+def now_hm(target_date=None):
+    n = _now()
+    if target_date:
+        try:
+            parts = target_date.split("-")
+            # 明日数据只显示日期，不显示时间，避免误解
+            return f"{int(parts[1]):02d}-{int(parts[2]):02d} 数据"
+        except Exception:
+            pass
+    return f"{n.month:02d}-{n.day:02d} {n.hour:02d}:{n.minute:02d}"
 
 
 def today_ymd():
-    return time.strftime("%Y-%m-%d", time.localtime())
+    return _now().strftime("%Y-%m-%d")
+
+
+def date_ymd(offset=0):
+    return (_now() + datetime.timedelta(days=offset)).strftime("%Y-%m-%d")
+
+
+def normalize_date(value):
+    if not value:
+        return today_ymd()
+    if value in ("today", "0"):
+        return today_ymd()
+    if value in ("tomorrow", "1"):
+        return date_ymd(1)
+    try:
+        return datetime.datetime.strptime(value, "%Y-%m-%d").strftime("%Y-%m-%d")
+    except Exception:
+        return today_ymd()
 
 
 def timestamp_ms():
@@ -154,7 +188,7 @@ def classify_extrema(extrema):
     return sorted_items
 
 
-def build_qingdao_tide_table(site, report, sub, extrema):
+def build_qingdao_tide_table(site, report, sub, extrema, target_date):
     highs = [x for x in extrema if x["type"] == "高潮"]
     lows = [x for x in extrema if x["type"] == "低潮"]
 
@@ -168,7 +202,7 @@ def build_qingdao_tide_table(site, report, sub, extrema):
 
     row = {
         "SEABEACH": site.get("Name") or GLOBAL_TIDE_SITE_NAME,
-        "FORECASTDATE": today_ymd(),
+        "FORECASTDATE": target_date,
         "FIRSTHIGHTIME": pick(highs, 0, "time"),
         "FIRSTHIGHLEVEL": pick(highs, 0, "height"),
         "SECONDHIGHTIME": pick(highs, 1, "time"),
@@ -184,18 +218,20 @@ def build_qingdao_tide_table(site, report, sub, extrema):
     return {"rows": [row], "site": site, "extrema": extrema}
 
 
-def fetch_qingdao_tide_data():
+def fetch_qingdao_tide_data(target_date=None):
+    target_date = normalize_date(target_date)
     result = post_global_tide_api("GetData", {
         "code": GLOBAL_TIDE_SITE_CODE,
-        "date": today_ymd(),
+        "date": target_date,
     })
     body = result.get("Data") or {}
     site = body.get("Site") or {}
     report = body.get("Data") or {}
     sub = body.get("SubData") or {}
-    year = int(report.get("Year") or time.localtime().tm_year)
-    month = int(report.get("Month") or time.localtime().tm_mon)
-    day = int(sub.get("Day") or time.localtime().tm_mday)
+    n = _now()
+    year = int(report.get("Year") or n.year)
+    month = int(report.get("Month") or n.month)
+    day = int(sub.get("Day") or n.day)
     date_text = f"{year}/{month}/{day}"
 
     chart = []
@@ -243,7 +279,7 @@ def fetch_qingdao_tide_data():
 
     return {
         "chart": chart,
-        "table": build_qingdao_tide_table(site, report, sub, extrema),
+        "table": build_qingdao_tide_table(site, report, sub, extrema, target_date),
         "site": site_info,
         "extrema": extrema,
         "sourceTime": result.get("ResultTime", "--"),
@@ -318,6 +354,11 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         self.set_json_response(status)
         self.wfile.write(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
 
+    def query_date(self):
+        parsed = urllib.parse.urlparse(self.path)
+        query = urllib.parse.parse_qs(parsed.query)
+        return normalize_date((query.get("date") or [""])[0])
+
     def do_GET(self):
         path = urllib.parse.urlparse(self.path).path
         routes = {
@@ -332,12 +373,13 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         self.handle_page()
 
     def handle_tide(self):
-        print(f"\n【青岛高低潮表接口】global-tide {GLOBAL_TIDE_SITE_NAME}({GLOBAL_TIDE_SITE_CODE}) {today_ymd()}")
+        target_date = self.query_date()
+        print(f"\n【青岛高低潮表接口】global-tide {GLOBAL_TIDE_SITE_NAME}({GLOBAL_TIDE_SITE_CODE}) {target_date}")
         try:
-            qd = fetch_qingdao_tide_data()
+            qd = fetch_qingdao_tide_data(target_date)
             data = qd["table"]
             cache["tide_table"] = data
-            cache["refresh"]["tide_table"] = now_hm()
+            cache["refresh"]["tide_table"] = now_hm(target_date)
             self.write_json(json_payload(
                 True,
                 data,
@@ -349,22 +391,27 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             ))
         except Exception as e:
             print(f"【青岛高低潮表】异常：{repr(e)}")
-            self.write_json(json_payload(
-                False,
-                cache["tide_table"],
-                cache["refresh"]["tide_table"],
-                "青岛高低潮表接口异常，展示缓存" if cache["tide_table"] else "青岛高低潮表接口异常",
-            ))
+            is_tomorrow = target_date != today_ymd()
+            if is_tomorrow:
+                self.write_json(json_payload(False, None, "--", "暂无明日潮汐表数据", tomorrow_unavailable=True))
+            else:
+                self.write_json(json_payload(
+                    False,
+                    cache["tide_table"],
+                    cache["refresh"]["tide_table"],
+                    "青岛高低潮表接口异常，展示缓存" if cache["tide_table"] else "青岛高低潮表接口异常",
+                ))
 
     def handle_tide_chart(self):
-        print(f"\n【青岛潮汐曲线接口】global-tide {GLOBAL_TIDE_SITE_NAME}({GLOBAL_TIDE_SITE_CODE}) {today_ymd()}")
+        target_date = self.query_date()
+        print(f"\n【青岛潮汐曲线接口】global-tide {GLOBAL_TIDE_SITE_NAME}({GLOBAL_TIDE_SITE_CODE}) {target_date}")
         try:
-            qd = fetch_qingdao_tide_data()
+            qd = fetch_qingdao_tide_data(target_date)
             chart_arr = qd["chart"]
             if not chart_arr:
                 raise ValueError("青岛潮汐曲线数据为空")
             cache["tide_chart"] = chart_arr
-            cache["refresh"]["tide_chart"] = now_hm()
+            cache["refresh"]["tide_chart"] = now_hm(target_date)
             self.write_json(json_payload(
                 True,
                 None,
@@ -377,10 +424,15 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             ))
         except Exception as e:
             print(f"【青岛潮汐曲线】异常：{repr(e)}")
-            self.write_json(json_payload(False, None, "--", "青岛潮汐曲线数据获取失败", chart=[]))
+            is_tomorrow = target_date != today_ymd()
+            if is_tomorrow:
+                self.write_json(json_payload(False, None, "--", "暂无明日潮汐曲线数据", chart=[], tomorrow_unavailable=True))
+            else:
+                self.write_json(json_payload(False, None, "--", "青岛潮汐曲线数据获取失败", chart=[]))
 
     def handle_wave(self):
-        target = f"http://www.qdmf.org.cn/Ajax/SeaBeach24hWave.ashx?date={today_ymd()}&_t={timestamp_ms()}"
+        target_date = self.query_date()
+        target = f"http://www.qdmf.org.cn/Ajax/SeaBeach24hWave.ashx?date={target_date}&_t={timestamp_ms()}"
         print(f"\n【浪高接口】{target}")
         try:
             data = fetch_json(target)
@@ -406,23 +458,29 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 "swim_tip": row.get("SB24hWFSixthBathingSwimWarn") or "--",
             }
             cache["wave"] = wave_info
-            cache["refresh"]["wave"] = now_hm()
+            cache["refresh"]["wave"] = now_hm(target_date)
             self.write_json(json_payload(True, wave_info, cache["refresh"]["wave"], "浪高实时数据"))
         except Exception as e:
             print(f"【浪高】异常：{repr(e)}")
-            self.write_json(json_payload(
-                False,
-                cache["wave"],
-                cache["refresh"]["wave"] if cache["wave"] else "--",
-                "浪高接口异常，展示缓存" if cache["wave"] else "浪高接口异常",
-            ))
+            is_tomorrow = target_date != today_ymd()
+            if is_tomorrow:
+                self.write_json(json_payload(False, None, "--", "暂无明日海况数据", tomorrow_unavailable=True))
+            else:
+                self.write_json(json_payload(
+                    False,
+                    cache["wave"],
+                    cache["refresh"]["wave"] if cache["wave"] else "--",
+                    "浪高接口异常，展示缓存" if cache["wave"] else "浪高接口异常",
+                ))
 
     def handle_weather(self):
+        target_date = self.query_date()
         params = urllib.parse.urlencode({
             "latitude": WEATHER_LATITUDE,
             "longitude": WEATHER_LONGITUDE,
             "current": "temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
-            "daily": "temperature_2m_max,temperature_2m_min",
+            "daily": "temperature_2m_max,temperature_2m_min,weather_code,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant",
+            "forecast_days": 2,
             "timezone": "Asia/Shanghai",
         })
         target = f"https://api.open-meteo.com/v1/forecast?{params}"
@@ -436,33 +494,45 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             }, timeout=18)
             current = raw.get("current", {}) if isinstance(raw, dict) else {}
             daily = raw.get("daily", {}) if isinstance(raw, dict) else {}
-            temp_max = (daily.get("temperature_2m_max") or [None])[0] if isinstance(daily.get("temperature_2m_max"), list) else None
-            temp_min = (daily.get("temperature_2m_min") or [None])[0] if isinstance(daily.get("temperature_2m_min"), list) else None
-            code = current.get("weather_code")
-            direction_degree = current.get("wind_direction_10m")
+            daily_times = daily.get("time") or []
+            day_index = daily_times.index(target_date) if target_date in daily_times else 0
+
+            def daily_pick(key):
+                arr = daily.get(key)
+                return arr[day_index] if isinstance(arr, list) and len(arr) > day_index else None
+
+            is_today = target_date == today_ymd()
+            temp_max = daily_pick("temperature_2m_max")
+            temp_min = daily_pick("temperature_2m_min")
+            code = current.get("weather_code") if is_today else daily_pick("weather_code")
+            direction_degree = current.get("wind_direction_10m") if is_today else daily_pick("wind_direction_10m_dominant")
             weather = {
-                "temperature": format_value(current.get("temperature_2m"), "℃"),
-                "apparent_temperature": format_value(current.get("apparent_temperature"), "℃"),
+                "temperature": format_value(current.get("temperature_2m"), "℃") if is_today else (format_value(temp_max, "℃") if temp_max is not None else "--"),
+                "apparent_temperature": format_value(current.get("apparent_temperature"), "℃") if is_today else (format_value(temp_min, "℃") if temp_min is not None else "--"),
                 "temperature_range": "--" if temp_min is None or temp_max is None else f"{temp_min} ℃ ~ {temp_max} ℃",
-                "humidity": format_value(current.get("relative_humidity_2m"), "%"),
+                "humidity": format_value(current.get("relative_humidity_2m"), "%") if is_today else "--",
                 "weather": weather_code_text(code),
-                "wind_speed": format_value(current.get("wind_speed_10m"), "km/h"),
+                "wind_speed": format_value(current.get("wind_speed_10m"), "km/h") if is_today else format_value(daily_pick("wind_speed_10m_max"), "km/h"),
                 "wind_direction": wind_direction_text(direction_degree),
                 "wind_direction_degree": "--" if direction_degree is None else f"{direction_degree}°",
-                "wind_gusts": format_value(current.get("wind_gusts_10m"), "km/h"),
-                "source_time": current.get("time", "--"),
+                "wind_gusts": format_value(current.get("wind_gusts_10m"), "km/h") if is_today else format_value(daily_pick("wind_gusts_10m_max"), "km/h"),
+                "source_time": current.get("time", "--") if is_today else target_date,
             }
             cache["weather"] = weather
-            cache["refresh"]["weather"] = now_hm()
+            cache["refresh"]["weather"] = now_hm(target_date)
             self.write_json(json_payload(True, weather, cache["refresh"]["weather"], "实时天气数据"))
         except Exception as e:
             print(f"【实时天气】异常：{repr(e)}")
-            self.write_json(json_payload(
-                False,
-                cache["weather"],
-                cache["refresh"]["weather"] if cache["weather"] else "--",
-                "天气接口异常，展示缓存" if cache["weather"] else "天气接口异常",
-            ))
+            is_tomorrow = target_date != today_ymd()
+            if is_tomorrow:
+                self.write_json(json_payload(False, None, "--", "暂无明日天气数据", tomorrow_unavailable=True))
+            else:
+                self.write_json(json_payload(
+                    False,
+                    cache["weather"],
+                    cache["refresh"]["weather"] if cache["weather"] else "--",
+                    "天气接口异常，展示缓存" if cache["weather"] else "天气接口异常",
+                ))
 
     def handle_page(self):
         self.send_response(200)
@@ -538,8 +608,9 @@ body{
 .live{display:flex;align-items:center;gap:8px;color:var(--success);font-size:12px;white-space:nowrap;min-width:0;}
 .live-dot{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 10px var(--success);animation:pulse 1.6s infinite;}
 .top-actions{display:flex;align-items:center;gap:8px;white-space:nowrap;}
-.sound-btn,.refresh-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border2);background:rgba(15,21,40,.88);color:var(--brand);border-radius:999px;padding:5px 10px;font-size:12px;cursor:pointer;box-shadow:0 0 12px rgba(var(--brand-rgb),.12);white-space:nowrap;}
+.sound-btn,.refresh-btn,.day-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border2);background:rgba(15,21,40,.88);color:var(--brand);border-radius:999px;padding:5px 10px;font-size:12px;cursor:pointer;box-shadow:0 0 12px rgba(var(--brand-rgb),.12);white-space:nowrap;}
 .refresh-btn{background:rgba(0,229,255,.12);}
+.day-btn.active{background:rgba(0,229,255,.24);color:#fff;border-color:rgba(0,229,255,.55);}
 .top-clock{text-align:right;}
 .top-date{font-size:12px;color:rgba(232,234,246,.72);white-space:nowrap;}
 .top-time{font-size:20px;letter-spacing:.16em;color:var(--brand);text-shadow:0 0 12px rgba(var(--brand-rgb),.45);font-weight:700;}
@@ -582,6 +653,8 @@ body{
 .module-title::before{content:"";width:3px;height:14px;border-radius:2px;background:var(--brand);box-shadow:0 0 8px rgba(var(--brand-rgb),.65);margin-right:6px;animation:titleSpark 2.4s ease-in-out infinite;}
 .module-title span:first-child{display:flex;align-items:center;color:var(--muted);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .module-title small{font-size:12px;color:rgba(232,234,246,.70);letter-spacing:0;text-transform:none;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%;}
+.module-title small.update-time{font-size:10px;color:rgba(232,234,246,.45);font-weight:400;max-width:35%;flex-shrink:0;}
+.module-unavailable{position:relative;z-index:2;text-align:center;padding:32px 16px;color:rgba(232,234,246,.35);font-size:13px;font-weight:600;letter-spacing:.08em;}
 .data-value{color:var(--brand);text-shadow:0 0 10px rgba(var(--brand-rgb),.35);font-weight:800;}
 .metric-grid{position:relative;z-index:2;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
 .metric-grid.three{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));height:calc(100% - 40px);}
@@ -670,8 +743,17 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
 @media (max-width:1079px){
   html,body{overflow:auto}
   .app{height:auto;min-height:100vh}
-  .topbar{height:auto;min-height:56px;flex-wrap:wrap;gap:8px;padding:10px 14px}
-  .top-actions{order:3;width:100%;justify-content:center}
+  .topbar{height:auto;min-height:48px;flex-wrap:wrap;gap:4px 8px;padding:calc(8px + env(safe-area-inset-top,0px)) 10px 6px;align-items:center}
+  .brand{width:100%;justify-content:center;gap:6px}
+  .brand-code{font-size:11px;letter-spacing:.12em}
+  .brand-title{font-size:11px;max-width:68vw}
+  .live{order:1;flex:1 1 0%;justify-content:center;font-size:11px;gap:6px}
+  .top-actions{order:2;flex:1 1 0%;justify-content:center;gap:6px}
+  .sound-btn,.refresh-btn,.day-btn{font-size:11px;padding:4px 8px;min-width:64px;justify-content:center}
+  .top-clock{order:3;width:100%;text-align:center}
+  .top-date{font-size:11px;white-space:normal;line-height:1.2}
+  .top-time{font-size:22px;letter-spacing:.10em;line-height:1.05;margin-top:1px}
+  .content{padding:10px 10px 16px}
   .content{height:auto;display:block;overflow:visible}
   .row-main,.row-bottom{display:block}
   .card{margin:10px 0;min-height:220px}
@@ -691,6 +773,8 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
     </div>
     <div class="live"><span class="live-dot"></span><span>实时在线</span><span id="globalUpdate">数据更新 --</span></div>
     <div class="top-actions">
+      <button id="todayBtn" class="day-btn active" onclick="switchForecastDay(0)">今日</button>
+      <button id="tomorrowBtn" class="day-btn" onclick="switchForecastDay(1)">明日</button>
       <button id="refreshBtn" class="refresh-btn" onclick="refreshAllData()">刷新全部数据</button>
       <button id="soundBtn" class="sound-btn" onclick="toggleSound()">🔇 声音关</button>
     </div>
@@ -699,10 +783,10 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
 
   <main class="content">
     <section class="row-main">
-      <div class="card tide-card">
+      <div class="card tide-card" id="tideCard">
         <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
         <div class="module-title"><span>潮汐状态</span><small id="tideUpdate">--</small></div>
-        <div class="status-big">
+        <div class="status-big" id="tideCardContent">
           <div>
             <span id="tideBadge" class="status-badge">等待加载</span>
             <div id="tideStatusText" class="status-text">正在获取青岛潮汐数据</div>
@@ -742,13 +826,13 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
         </div>
       </div>
 
-      <div class="card weather-card">
+      <div class="card weather-card" id="weatherCard">
         <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
         <div class="module-title"><span>实时天气与风况</span><small id="weatherTime">--</small></div>
         <div class="temp-strip">
-          <div class="temp-card primary"><div class="label">当前气温</div><div id="airTemp" class="value">--</div></div>
-          <div class="temp-card"><div class="label">今日温度</div><div id="tempRange" class="value">--</div></div>
-          <div class="temp-card"><div class="label">体感温度</div><div id="apparentTemp" class="value">--</div></div>
+          <div class="temp-card primary"><div id="airTempLabel" class="label">当前气温</div><div id="airTemp" class="value">--</div></div>
+          <div class="temp-card"><div id="tempRangeLabel" class="label">今日温度</div><div id="tempRange" class="value">--</div></div>
+          <div class="temp-card"><div id="apparentTempLabel" class="label">体感温度</div><div id="apparentTemp" class="value">--</div></div>
         </div>
         <div class="weather-hero">
           <div id="weatherIcon" class="weather-icon cloudy"></div>
@@ -769,7 +853,7 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
     </section>
 
     <section class="row-bottom">
-      <div class="card sea-card">
+      <div class="card sea-card" id="seaCard">
         <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
         <div class="module-title"><span>海况数据</span><small id="waveTime">--</small></div>
         <div class="metric-grid three">
@@ -782,15 +866,15 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
         </div>
       </div>
 
-      <div class="card chart-card">
+      <div class="card chart-card" id="chartCard">
         <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-        <div class="module-title"><span>青岛今日潮汐曲线</span><small id="chartSource">全球潮汐平台</small></div>
+        <div class="module-title"><span id="chartTitle">青岛今日潮汐曲线</span><small id="chartSource">全球潮汐平台</small><small id="chartTime" class="update-time">--</small></div>
         <div id="tideChart">等待曲线数据</div>
       </div>
 
-      <div class="card table-card">
+      <div class="card table-card" id="tableCard">
         <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-        <div class="module-title"><span>高低潮位表</span><small>青岛站</small></div>
+        <div class="module-title"><span>高低潮位表</span><small id="tableDateLabel">青岛站</small><small id="tableTime" class="update-time">--</small></div>
         <div id="mainBox" class="tide-table-wrap">加载青岛高低潮表...</div>
       </div>
     </section>
@@ -798,7 +882,7 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
 </div>
 
 <script>
-let tideRawData=null, tideChart=null, lastChartRaw=null, lastChartSite=null, lastChartPoints=[], lastTideList=[], resizeTimer=null, lastTideRising=null, soundEnabled=false, audioCtx=null;
+let tideRawData=null, tideChart=null, lastChartRaw=null, lastChartSite=null, lastChartPoints=[], lastTideList=[], resizeTimer=null, lastTideRising=null, soundEnabled=false, audioCtx=null, selectedDayOffset=0;
 const $=id=>document.getElementById(id);
 function setText(id,text){const el=$(id); if(el) el.textContent=(text===null||text===undefined||text==="")?"--":text;}
 function lunarText(d){
@@ -819,9 +903,39 @@ function nowParts(){
   };
 }
 function updateClock(){const p=nowParts();setText("nowTime",p.time);setText("dateText",p.date);}
+function selectedDate(){
+  const d=new Date();
+  d.setDate(d.getDate()+selectedDayOffset);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function selectedDayLabel(){
+  return selectedDayOffset===0?"今日":"明日";
+}
+function apiUrl(path){
+  return `${path}?date=${encodeURIComponent(selectedDate())}`;
+}
+function updateDayButtons(){
+  const today=$("todayBtn"), tomorrow=$("tomorrowBtn");
+  if(today)today.classList.toggle("active",selectedDayOffset===0);
+  if(tomorrow)tomorrow.classList.toggle("active",selectedDayOffset===1);
+  setText("chartTitle",`青岛${selectedDayLabel()}潮汐曲线`);
+  setText("tableDateLabel",`青岛站 · ${selectedDayLabel()}`);
+  setText("airTempLabel",selectedDayOffset===0?"当前气温":"明日最高");
+  setText("tempRangeLabel",`${selectedDayLabel()}温度`);
+  setText("apparentTempLabel",selectedDayOffset===0?"体感温度":"明日最低");
+}
+function switchForecastDay(offset){
+  selectedDayOffset=offset;
+  lastTideRising=null;
+  // 切换时清除"暂无明日数据"提示
+  document.querySelectorAll(".module-unavailable").forEach(el=>el.remove());
+  updateDayButtons();
+  refreshAllData();
+}
 function fetchJSON(url,timeout=20000){
+  const sep=url.includes("?")?"&":"?";
   const c=new AbortController(); const t=setTimeout(()=>c.abort(),timeout);
-  return fetch(url,{signal:c.signal}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).finally(()=>clearTimeout(t));
+  return fetch(url+sep+"_t="+Date.now(),{signal:c.signal,cache:"no-store"}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).finally(()=>clearTimeout(t));
 }
 function reloadTyphoonFrame(){
   const f=$("typhoonFrame"); if(f) f.src="https://www.bhyb.org.cn/typhoon/?t="+Date.now();
@@ -840,7 +954,7 @@ function parseTidePointTime(s){
   if(text.includes(":")){const [hh,mm]=text.split(":");const h=parseInt(hh,10),m=parseInt(mm,10);if(Number.isNaN(h)||Number.isNaN(m))return null;return {label:`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`,minute:h*60+m};}
   const h=parseInt(text,10); if(Number.isNaN(h))return null; return {label:`${String(h).padStart(2,"0")}:00`,minute:h*60};
 }
-function todayKey(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+function todayKey(){return selectedDate();}
 function normalizeDateKey(s){
   if(!s)return ""; const datePart=String(s).split(" ")[0].replace(/-/g,"/"); const p=datePart.split("/");
   if(p.length<3)return ""; return `${p[0]}-${String(p[1]).padStart(2,"0")}-${String(p[2]).padStart(2,"0")}`;
@@ -916,7 +1030,7 @@ function renderWave(obj,updateTime){
   setText("seaRisk",obj?seaRiskText(obj.wave_height,obj.swim_tip):"--");
 }
 function renderTide(res,upTime){
-  tideRawData=res; setText("tideUpdate",`更新 ${upTime||"--"}`); setText("globalUpdate",`数据更新 ${upTime||"--"}`);
+  tideRawData=res; setText("tideUpdate",`更新 ${upTime||"--"}`); setText("globalUpdate",`数据更新 ${upTime||"--"}`); setText("tableTime","更新 "+(upTime||"--"));
   if(!res||!res.data||!Array.isArray(res.data.rows)){ $("mainBox").innerHTML="潮汐数据为空"; return; }
   const item=res.data.rows[0]; if(!item){$("mainBox").innerHTML="无青岛高低潮预报"; return;}
   const list=[
@@ -946,8 +1060,12 @@ function interpolateCurrentLevel(points, nowMin){
   return null;
 }
 function calcTideStatus(list){
-  const now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
-  setText("tideUpdate",`状态 ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`);
+  if(document.querySelector("#tideCard .module-unavailable"))return;
+  const now=new Date(), nowMin=selectedDayOffset===0 ? now.getHours()*60+now.getMinutes() : 0;
+  if(selectedDayOffset===0){
+    const statusTime=`${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+    setText("tideUpdate",`状态 ${statusTime}`);
+  }
   const pts=list.map(x=>({min:timeToMin(x.t),height:Number(x.l),type:x.type,time:formatHHMM(x.t)})).filter(p=>p.min!==null&&!Number.isNaN(p.height)).sort((a,b)=>a.min-b.min);
   if(pts.length<2){setText("tideBadge","数据不足");setText("tideStatusText","潮位数据不足");return;}
   const curve=(lastChartPoints||[]).filter(p=>p.minute!==null&&!Number.isNaN(p.value)).sort((a,b)=>a.minute-b.minute);
@@ -975,12 +1093,12 @@ function calcTideStatus(list){
   }else if(next){
     rising=next.height-prev.height>0;
   }
-  setText("tideBadge",rising?"涨潮中":"退潮中");
+  setText("tideBadge",selectedDayOffset===0 ? (rising?"涨潮中":"退潮中") : "明日预报");
   setText("tideTrend",rising?"水位上升":"水位下降");
-  if(lastTideRising!==null&&rising&&!lastTideRising&&soundEnabled){playRisingSound();}
+  if(selectedDayOffset===0&&lastTideRising!==null&&rising&&!lastTideRising&&soundEnabled){playRisingSound();}
   lastTideRising=rising;
   if(next){
-    setText("tideStatusText",`下一次${next.type} ${next.time}，潮位 ${next.height} cm`);
+    setText("tideStatusText",`${selectedDayLabel()}下一次${next.type} ${next.time}，潮位 ${next.height} cm`);
     setText("nextTideDelta",formatDuration(next.min-nowMin));
     if(prev&&prev.min<nowMin&&prev.min<next.min){
       setText("tidePhase",`${prev.type}→${next.type}`);
@@ -992,9 +1110,9 @@ function calcTideStatus(list){
       setText("tideProgress","0%");
     }
   }else{
-    setText("tideStatusText","今日后续无高低潮预报，请等待明日数据刷新");
-    setText("nextTideDelta","今日无");
-    setText("tidePhase","今日末段");
+    setText("tideStatusText",`${selectedDayLabel()}后续无高低潮预报`);
+    setText("nextTideDelta",`${selectedDayLabel()}无`);
+    setText("tidePhase",`${selectedDayLabel()}末段`);
     setText("tideProgress","--");
   }
   const currentLevel=interpolateCurrentLevel(curve,nowMin);
@@ -1003,8 +1121,8 @@ function calcTideStatus(list){
   const nextHigh=highs.find(p=>p.min>nowMin), nextLow=lows.find(p=>p.min>nowMin);
   setText("nextHigh",(nextHigh||{}).time||"--");
   setText("nextLow",(nextLow||{}).time||"--");
-  setText("highDelta",nextHigh?formatDuration(nextHigh.min-nowMin):"今日无");
-  setText("lowDelta",nextLow?formatDuration(nextLow.min-nowMin):"今日无");
+  setText("highDelta",nextHigh?formatDuration(nextHigh.min-nowMin):`${selectedDayLabel()}无`);
+  setText("lowDelta",nextLow?formatDuration(nextLow.min-nowMin):`${selectedDayLabel()}无`);
   renderTideSummary(pts);
 }
 function initAudio(){
@@ -1074,10 +1192,34 @@ function renderChart(rawArr,msg,site){
     series:[{name:"潮高",type:"line",data:points.map(p=>p.value),smooth:true,symbolSize:4,itemStyle:{color:"#00e5ff"},lineStyle:{color:"#00e5ff",width:2.4,shadowBlur:8,shadowColor:"rgba(0,229,255,.45)"},areaStyle:{color:{type:"linear",colorStops:[{offset:0,color:"rgba(0,229,255,.26)"},{offset:1,color:"rgba(0,229,255,.03)"}]}},markPoint:{symbol:"circle",symbolSize:18,data:markData}}]
   },true);
 }
-async function loadWeather(){try{const r=await fetchJSON("/api/weather"); if(r&&r.data)renderWeather(r.data,r.updateTime);}catch(e){}}
-async function loadWave(){try{const r=await fetchJSON("/api/wave"); if(r&&r.data)renderWave(r.data,r.updateTime);}catch(e){}}
-async function loadTide(){try{const r=await fetchJSON("/api/tide"); if(r&&r.data)renderTide(r,r.updateTime);}catch(e){$("mainBox").innerHTML="潮汐数据加载失败";}}
-async function loadChart(){try{const r=await fetchJSON("/api/tideChart"); renderChart(r.chart,r.msg,r.site);}catch(e){renderChart([],"潮汐曲线加载失败",null);}}
+function clearModuleUnavailable(cardId){const card=$(cardId);if(card){const h=card.querySelector(".module-unavailable");if(h)h.remove();}}
+function setAllText(ids, text){ids.forEach(id=>setText(id,text));}
+function showWeatherUnavailable(){
+  clearModuleUnavailable("weatherCard");
+  setAllText(["airTemp","apparentTemp","tempRange","humidity","windSpeed","windDirection","windGusts","weatherSourceTime","windLevel"],"未知");
+  setText("weatherTime","暂无明日数据"); setText("weatherText","未知");
+  const icon=$("weatherIcon"); if(icon) icon.className="weather-icon";
+}
+function showWaveUnavailable(){
+  clearModuleUnavailable("seaCard");
+  setAllText(["waveHeight","waterTemp","waveLevel","waterComfort","swimTip","seaRisk"],"未知");
+  setText("waveTime","暂无明日数据");
+}
+function showTideUnavailable(){
+  clearModuleUnavailable("tideCard");
+  setAllText(["tideBadge","tideStatusText","nextHigh","nextLow","currentLevel","tideTrend","tidePhase","tideProgress","highDelta","lowDelta","tideRange"],"未知");
+  setText("tideUpdate","暂无明日数据"); setText("globalUpdate","数据更新 --"); setText("tableTime","暂无明日数据");
+  $("mainBox").innerHTML='<div class="module-unavailable">暂无明日数据</div>';
+}
+function showChartUnavailable(){
+  clearModuleUnavailable("chartCard");
+  setText("chartTime","暂无明日数据");
+  const tc=$("tideChart"); if(tc) tc.innerHTML='<div class="module-unavailable">暂无明日数据</div>';
+}
+async function loadWeather(){try{const r=await fetchJSON(apiUrl("/api/weather"));if(r&&r.tomorrow_unavailable){showWeatherUnavailable();return;}if(r&&r.data)renderWeather(r.data,r.updateTime);}catch(e){}}
+async function loadWave(){try{const r=await fetchJSON(apiUrl("/api/wave"));if(r&&r.tomorrow_unavailable){showWaveUnavailable();return;}if(r&&r.data)renderWave(r.data,r.updateTime);}catch(e){}}
+async function loadTide(){try{const r=await fetchJSON(apiUrl("/api/tide"));if(r&&r.tomorrow_unavailable){showTideUnavailable();return;}if(r&&r.data)renderTide(r,r.updateTime);}catch(e){$("mainBox").innerHTML="潮汐数据加载失败";}}
+async function loadChart(){try{const r=await fetchJSON(apiUrl("/api/tideChart"));if(r&&r.tomorrow_unavailable){showChartUnavailable();return;}setText("chartTime","更新 "+(r.updateTime||"--"));renderChart(r.chart,r.msg,r.site);}catch(e){renderChart([],"潮汐曲线加载失败",null);}}
 async function refreshAllData(){
   const btn=$("refreshBtn");
   if(btn){btn.disabled=true;btn.textContent="刷新中...";}
@@ -1092,6 +1234,7 @@ async function refreshAllData(){
 }
 function boot(){
   updateClock(); setInterval(updateClock,1000);
+  updateDayButtons();
   loadTide(); loadChart(); loadWeather(); loadWave();
   setInterval(loadTide,60*60*1000); setInterval(loadChart,6*60*60*1000); setInterval(loadWeather,10*60*1000); setInterval(loadWave,60*60*1000);
   setInterval(()=>{if(lastTideList.length)calcTideStatus(lastTideList)},60*1000);
