@@ -741,8 +741,8 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
 .safe{color:var(--success)!important}.bad{color:var(--error)!important}.warning{color:var(--warning)!important}
 @media (max-width:1079px){
   html,body{overflow:auto}
-  .app{height:auto;min-height:100vh}
-  .topbar{height:auto;min-height:48px;flex-wrap:wrap;gap:4px 8px;padding:calc(8px + env(safe-area-inset-top,0px)) 10px 6px;align-items:center}
+  .app{height:auto;min-height:100vh;overflow:visible}
+  .topbar{height:auto;min-height:48px;flex:0 0 auto;flex-wrap:wrap;gap:4px 8px;padding:calc(8px + env(safe-area-inset-top,0px)) 10px 6px;align-items:center;position:relative;z-index:10}
   .brand{width:100%;justify-content:center;gap:6px}
   .brand-code{font-size:11px;letter-spacing:.12em}
   .brand-title{font-size:11px;max-width:68vw}
@@ -754,8 +754,7 @@ th{background:rgba(0,229,255,.12);color:var(--brand);font-weight:800;}
   .top-clock{order:3;width:100%;text-align:center}
   .top-date{font-size:11px;white-space:normal;line-height:1.2}
   .top-time{font-size:22px;letter-spacing:.10em;line-height:1.05;margin-top:1px}
-  .content{padding:10px 10px 16px}
-  .content{height:auto;display:block;overflow:visible}
+  .content{padding:10px 10px 16px;height:auto;display:block;overflow:visible;position:static}
   .row-main,.row-bottom{display:block}
   .card{margin:10px 0;min-height:220px}
   .map-card{min-height:520px}.chart-card{min-height:320px}
