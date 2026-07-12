@@ -64,6 +64,100 @@ def _now():
     return datetime.datetime.now(_tz())
 
 
+def extract_time_from_title(title, default_year=None):
+    """从预警标题中提取发布时间，返回格式化后的时间字符串 (YYYY-MM-DD HH:MM 或 YYYY-MM-DD)。
+    支持的格式示例：
+    - 2026年07月11日16时30分
+    - 2026年07月11日16时
+    - 2026年07月11日
+    - 2026/07/11 16:30
+    - 2026-07-11 16:30
+    - 07月11日16时30分（需补全年份）
+    - 7月11日16时（需补全年份）
+    提取失败返回空字符串。
+    """
+    if not title:
+        return ""
+    s = str(title).strip()
+    if not s:
+        return ""
+    if default_year is None:
+        default_year = datetime.datetime.now().year
+
+    # 模式1: 2026年07月11日16时30分 / 2026年7月11日16时30分
+    m = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2})时(\d{1,2})分', s)
+    if m:
+        return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d} {int(m.group(4)):02d}:{int(m.group(5)):02d}"
+
+    # 模式2: 2026年07月11日16时
+    m = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2})时', s)
+    if m:
+        return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d} {int(m.group(4)):02d}:00"
+
+    # 模式3: 2026年07月11日
+    m = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', s)
+    if m:
+        return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+
+    # 模式4: 2026/07/11 16:30 或 2026-07-11 16:30
+    m = re.search(r'(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+(\d{1,2}):(\d{1,2})', s)
+    if m:
+        return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d} {int(m.group(4)):02d}:{int(m.group(5)):02d}"
+
+    # 模式5: 2026/07/11 或 2026-07-11
+    m = re.search(r'(\d{4})[-/](\d{1,2})[-/](\d{1,2})', s)
+    if m:
+        return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+
+    # 模式6: 07月11日16时30分（无年份，补全默认年份）
+    m = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})时(\d{1,2})分', s)
+    if m:
+        return f"{int(default_year):04d}-{int(m.group(1)):02d}-{int(m.group(2)):02d} {int(m.group(3)):02d}:{int(m.group(4)):02d}"
+
+    # 模式7: 07月11日16时（无年份，补全默认年份）
+    m = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})时', s)
+    if m:
+        return f"{int(default_year):04d}-{int(m.group(1)):02d}-{int(m.group(2)):02d} {int(m.group(3)):02d}:00"
+
+    # 模式8: 07月11日（无年份，补全默认年份）
+    m = re.search(r'(\d{1,2})月(\d{1,2})日', s)
+    if m:
+        return f"{int(default_year):04d}-{int(m.group(1)):02d}-{int(m.group(2)):02d}"
+
+    return ""
+
+
+def complete_alarm_time(base_time, title, default_year=None):
+    """补全预警发布时间：如果基础时间只有日期没有时分，尝试从标题中提取更完整的时间。
+    优先使用标题中包含时分的完整时间（日期需匹配或base_time为空）。
+    返回格式化后的时间字符串。
+    """
+    base_time = (base_time or "").strip()
+    # 如果已有完整时间（包含冒号或空格+时间），直接返回
+    if base_time and (":" in base_time or " " in base_time and len(base_time) > 11):
+        return base_time
+
+    # 从标题中提取完整时间
+    title_time = extract_time_from_title(title, default_year)
+    if not title_time:
+        return base_time  # 标题中也没提取到，返回原值
+
+    # 如果标题提取的时间包含时分，则优先使用
+    if ":" in title_time:
+        # 如果 base_time 有日期，检查日期是否匹配（统一格式后比较）
+        if base_time and len(base_time) >= 10:
+            base_date = base_time[:10].replace("/", "-").replace(".", "-")
+            title_date = title_time[:10]
+            if base_date == title_date:
+                return title_time  # 日期匹配，用更完整的
+            else:
+                return base_time  # 日期不匹配，保留原值
+        else:
+            return title_time  # base_time 为空或不完整，直接用标题提取的
+
+    return base_time or title_time
+
+
 def now_hm(target_date=None):
     n = _now()
     if target_date and target_date != today_ymd():
@@ -647,14 +741,129 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             }, timeout=15)
             import re
-            current_year = _now().year
-            # 提取警报链接和标题，只保留当年的
-            items = re.findall(r'<a[^>]*href="([^"]*)"[^>]*>([^<]*(?:警报|解除)[^<]*)</a>', html)
+            from datetime import datetime, timedelta
+            now_dt = _now()
+            current_year = now_dt.year
+            three_days_ago = now_dt.date() - timedelta(days=3)
             alarms = []
-            for link, title in items[:30]:
-                title = title.strip()
-                if title and "警报" in title and str(current_year) in title:
-                    alarms.append({"title": title, "url": link if link.startswith("http") else "http://www.qdmf.org.cn/" + link})
+
+            # 方法1：从JS数组 emer 中提取数据（包含文件名等完整信息）
+            emer_match = re.search(r'var\s+emer\s*=\s*(\[.*?\]);', html, re.S)
+            if emer_match:
+                try:
+                    import json
+                    js_arr = emer_match.group(1)
+                    js_arr = re.sub(r"(\w+):", r'"\1":', js_arr)
+                    js_arr = js_arr.replace("'", '"')
+                    data_list = json.loads(js_arr)
+                    for item in data_list[:30]:
+                        des = item.get("DES") or item.get("des") or ""
+                        filename = item.get("FILENAME") or item.get("filename") or item.get("FILE") or item.get("file") or ""
+                        pub = item.get("PUBTIME") or item.get("pubtime") or item.get("time") or ""
+                        if not des:
+                            continue
+                        des = str(des).strip()
+                        if "警报" not in des and "解除" not in des:
+                            continue
+                        if str(current_year) not in des and str(current_year) not in str(pub):
+                            continue
+                        # 提取发布时间（含时分）
+                        pub_time = ""
+                        pub_date_obj = None
+                        m = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2})时', des)
+                        if m:
+                            pub_time = f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d} {int(m.group(4)):02d}:00"
+                            pub_date_obj = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
+                        else:
+                            m2 = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', des)
+                            if m2:
+                                pub_time = f"{m2.group(1)}-{int(m2.group(2)):02d}-{int(m2.group(3)):02d}"
+                                pub_date_obj = datetime(int(m2.group(1)), int(m2.group(2)), int(m2.group(3))).date()
+                            elif pub:
+                                pm = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', str(pub))
+                                if pm:
+                                    pub_time = f"{pm.group(1)}-{int(pm.group(2)):02d}-{int(pm.group(3)):02d}"
+                                    pub_date_obj = datetime(int(pm.group(1)), int(pm.group(2)), int(pm.group(3))).date()
+                        # 只保留最近3天
+                        if pub_date_obj and pub_date_obj < three_days_ago:
+                            continue
+                        # 构造详情页URL
+                        detail_url = ""
+                        if filename:
+                            fname = str(filename)
+                            if not fname.lower().endswith('.doc') and not fname.lower().endswith('.docx'):
+                                fname += ".docx"
+                            detail_url = "http://www.qdmf.org.cn/Alermfile.aspx?fliename=" + fname
+                        # 标题时间兜底
+                        alarms.append({
+                            "title": des,
+                            "url": detail_url,
+                            "publish_time": complete_alarm_time(pub_time, des, current_year),
+                            "level": "",
+                            "type": "海洋预警"
+                        })
+                except Exception:
+                    alarms = []
+
+            # 方法2：从a标签提取（兜底）
+            if not alarms:
+                # 匹配所有a标签，提取href和文本，支持带span时间的格式
+                items = re.findall(r'<a[^>]*href="([^"]*)"[^>]*>(.*?)</a>', html, re.S)
+                for link, title_html in items[:50]:
+                    title = re.sub(r'<[^>]+>', '', title_html).strip()
+                    title = title.replace('&nbsp;', ' ').strip()
+                    if not title or ("警报" not in title and "解除" not in title):
+                        continue
+                    if str(current_year) not in title:
+                        continue
+                    # 提取发布时间（含时分）
+                    pub_time = ""
+                    pub_date_obj = None
+                    m = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2})时', title)
+                    if m:
+                        pub_time = f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d} {int(m.group(4)):02d}:00"
+                        pub_date_obj = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
+                    else:
+                        m2 = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', title)
+                        if m2:
+                            pub_time = f"{m2.group(1)}-{int(m2.group(2)):02d}-{int(m2.group(3)):02d}"
+                            pub_date_obj = datetime(int(m2.group(1)), int(m2.group(2)), int(m2.group(3))).date()
+                    # 只保留最近3天
+                    if pub_date_obj and pub_date_obj < three_days_ago:
+                        continue
+                    # 从链接路径中提取文件名，构造Alermfile.aspx格式
+                    detail_url = ""
+                    fname = ""
+                    # 从URL参数中提取
+                    fm = re.search(r'[?&](?:fliename|filename|file|name)=([^&]+)', link, re.I)
+                    if fm:
+                        fname = fm.group(1)
+                    else:
+                        # 从路径中提取文件名
+                        fm2 = re.search(r'([^/]+\.docx?)', link, re.I)
+                        if fm2:
+                            fname = fm2.group(1)
+                        else:
+                            # 尝试从路径最后一段提取
+                            parts = link.rstrip('/').split('/')
+                            last = parts[-1] if parts else ""
+                            if last and '.' in last and not last.startswith('?'):
+                                fname = last
+                    if fname:
+                        if not fname.lower().endswith('.doc') and not fname.lower().endswith('.docx'):
+                            fname += ".docx"
+                        detail_url = "http://www.qdmf.org.cn/Alermfile.aspx?fliename=" + fname
+                    else:
+                        detail_url = link if link.startswith("http") else "http://www.qdmf.org.cn/" + link
+                    # 标题时间兜底
+                    alarms.append({
+                        "title": title,
+                        "url": detail_url,
+                        "publish_time": complete_alarm_time(pub_time, title, current_year),
+                        "level": "",
+                        "type": "海洋预警"
+                    })
+
             if alarms:
                 cache["alarm"] = alarms
                 cache["refresh"]["alarm"] = now_hm()
@@ -781,7 +990,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                     "title": title,
                     "type": alarm_type,
                     "level": level,
-                    "publish_time": time_text or "--",
+                    "publish_time": complete_alarm_time(time_text if time_text and time_text != "--" else "", title),
                     "url": full_url,
                     "region": "山东",
                     "qingdao_related": qingdao_related,
@@ -1028,6 +1237,12 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                     alarm_type = item.get("type") or item.get("Type") or item.get("category") or item.get("alarmType") or ""
                     pub_time = item.get("pubTime") or item.get("PubTime") or item.get("publishTime") or item.get("effective") or ""
                     item_url = item.get("url") or item.get("Url") or item.get("link") or item.get("href") or ""
+                    alarm_id = item.get("id") or item.get("alarmId") or item.get("alertId") or item.get("alarmid") or ""
+                    # 统一时间格式：2026/07/11 16:30 -> 2026-07-11 16:30
+                    if pub_time:
+                        pub_time = str(pub_time).replace("/", "-").replace(".", "-")
+                    # 标题时间补全：如果只有日期没有时分，从标题中提取
+                    pub_time = complete_alarm_time(pub_time, title)
                     level_name = ""
                     if "红" in str(level):
                         level_name = "红色"
@@ -1052,6 +1267,11 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                             level_name = "黄色"
                         elif "蓝色" in title:
                             level_name = "蓝色"
+                    # 构造详情页URL
+                    if not item_url and alarm_id:
+                        item_url = f"https://weather.cma.cn/web/alarm/{alarm_id}.html"
+                    elif not item_url and title:
+                        item_url = "https://weather.cma.cn/"
                     alarms.append({
                         "title": title,
                         "level": level_name,
@@ -1119,12 +1339,15 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                         pass
                 detail_url = ""
                 if doc_name:
-                    detail_url = f"http://www.qdmf.org.cn/alert/{doc_name}"
+                    fname = str(doc_name)
+                    if not fname.lower().endswith('.doc') and not fname.lower().endswith('.docx'):
+                        fname += ".docx"
+                    detail_url = "http://www.qdmf.org.cn/Alermfile.aspx?fliename=" + fname
                 alarms.append({
                     "title": title,
                     "level": level_name,
                     "type": content + "预警" if content else "海洋预警",
-                    "publish_time": time_str,
+                    "publish_time": complete_alarm_time(time_str, title, current_year),
                     "url": detail_url,
                     "source": "海洋预报台",
                     "qingdao_related": True,
@@ -1192,7 +1415,8 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 if alertid:
                     detail_url = f"http://www.nmc.cn/publish/alarm/{alertid}.html"
                 # 格式化发布时间
-                pub_time = issuetime.replace("/", "-") if issuetime else ""
+                pub_time = issuetime.replace("/", "-").replace(".", "-") if issuetime else ""
+                pub_time = complete_alarm_time(pub_time, title)
                 qingdao_flag = "青岛" in title
                 alarms.append({
                     "title": title,
@@ -1292,7 +1516,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                             "title": title,
                             "level": level_name,
                             "type": "台风预警",
-                            "publish_time": "",
+                            "publish_time": complete_alarm_time("", title),
                             "url": detail_url,
                             "source": "中央气象台台风网",
                             "qingdao_related": True,
@@ -1389,7 +1613,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                         "title": title,
                         "level": level_name,
                         "type": alarm_type,
-                        "publish_time": "",
+                        "publish_time": complete_alarm_time("", title, current_year),
                         "url": detail_url,
                         "source": "山东省海洋预报台",
                         "qingdao_related": True,
@@ -1659,11 +1883,12 @@ body{
 .cma-alarm-bar.bar-orange::before{background:repeating-linear-gradient(90deg,transparent,transparent 30px,rgba(255,152,0,.025) 30px,rgba(255,152,0,.025) 60px);}
 .cma-alarm-bar.bar-red{background:linear-gradient(180deg,rgba(255,43,43,.10),rgba(255,43,43,.03));border-bottom-color:rgba(255,43,43,.25);}
 .cma-alarm-bar.bar-red::before{background:repeating-linear-gradient(90deg,transparent,transparent 30px,rgba(255,43,43,.025) 30px,rgba(255,43,43,.025) 60px);}
-.cma-alarm-bar-label{position:relative;z-index:2;flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:4px;font-size:var(--fs-label);font-weight:800;color:#42a5f5;background:rgba(33,150,243,.12);border:1px solid rgba(33,150,243,.35);text-shadow:0 0 8px rgba(33,150,243,.5);letter-spacing:.12em;margin-right:14px;}
+.cma-alarm-bar-label{position:relative;z-index:2;flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:4px;font-size:var(--fs-label);font-weight:800;color:#42a5f5;background:rgba(33,150,243,.12);border:1px solid rgba(33,150,243,.35);text-shadow:0 0 8px rgba(33,150,243,.5);letter-spacing:.12em;margin-right:10px;}
 .cma-alarm-bar-label::before{content:"";width:6px;height:6px;border-radius:50%;background:#42a5f5;box-shadow:0 0 8px #42a5f5;animation:cmaWarnBlink 1.2s ease-in-out infinite;}
+.cma-alarm-bar-time{position:relative;z-index:2;flex:0 0 auto;font-size:calc(var(--fs-label) - 1px);color:rgba(232,234,246,.45);margin-right:14px;}
 @keyframes cmaWarnBlink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
 .cma-alarm-marquee{position:relative;z-index:2;flex:1;overflow:hidden;white-space:nowrap;}
-.cma-alarm-marquee-inner{display:inline-block;padding-left:100%;animation:marqueeScroll 60s linear infinite;font-size:var(--fs-label);color:rgba(232,234,246,.88);}
+.cma-alarm-marquee-inner{display:inline-block;padding-left:100%;animation:marqueeScroll 90s linear infinite;font-size:var(--fs-label);color:rgba(232,234,246,.88);}
 .cma-alarm-marquee:hover .cma-alarm-marquee-inner{animation-play-state:paused;}
 .cma-alarm-item{display:inline-block;margin-right:60px;cursor:pointer;padding:2px 0;transition:all .2s;}
 .cma-alarm-item:hover{text-shadow:0 0 8px currentColor;}
@@ -1944,6 +2169,7 @@ html.mobile .beach-list-body{gap:6px;grid-template-columns:repeat(2,1fr);}</styl
 
   <div class="cma-alarm-bar" id="cmaAlarmBar">
     <div class="cma-alarm-bar-label">气象预警</div>
+    <span class="cma-alarm-bar-time" id="cmaAlarmTime">更新 --</span>
     <div class="cma-alarm-marquee">
       <div class="cma-alarm-marquee-inner" id="cmaAlarmMarquee">
         <span class="cma-alarm-item">暂无预警信息</span>
@@ -2598,18 +2824,28 @@ function renderChart(rawArr,msg,site){
     yAxis:{name:"潮高(cm)",type:"value",max:Math.ceil((maxVal+35)/50)*50,nameTextStyle:{fontSize:nameFont,color:"rgba(232,234,246,.65)"},axisLabel:{fontSize:axisFont,color:"rgba(232,234,246,.65)"},axisLine:{lineStyle:{color:"rgba(0,229,255,.28)"}},splitLine:{lineStyle:{color:"rgba(255,255,255,.07)"}}},
     series:[{name:"潮高",type:"line",data:points.map(function(p){return p.value;}),smooth:true,symbolSize:4,itemStyle:{color:"#00e5ff"},lineStyle:{color:"#00e5ff",width:2.4,shadowBlur:8,shadowColor:"rgba(0,229,255,.45)"},areaStyle:{color:{type:"linear",colorStops:[{offset:0,color:"rgba(0,229,255,.26)"},{offset:1,color:"rgba(0,229,255,.03)"}]}},markPoint:{symbol:"circle",symbolSize:18,data:markData},markLine:{symbol:"none",silent:true,data:[],lineStyle:{color:"#ff5252",width:1.5,type:"solid",shadowBlur:6,shadowColor:"rgba(255,82,82,.5)"},label:{show:true,formatter:"现在",color:"#ff5252",fontSize:markFont,fontWeight:"bold",position:"end",distance:[4,0],backgroundColor:"rgba(6,10,20,.8)",padding:[2,6,2,6],borderRadius:3}}}]
   },true);
-  // 启动当前时间标线更新
-  startNowMarkLine();
+  // 启动当前时间标线更新（明日模式下不显示）
+  if(selectedDayOffset===0){
+    startNowMarkLine();
+  }else{
+    if(nowMarkLineTimer){clearInterval(nowMarkLineTimer);nowMarkLineTimer=null;}
+    if(tideChart)tideChart.setOption({series:[{markLine:{data:[]}}]});
+  }
 }
 var nowMarkLineTimer=null;
 function startNowMarkLine(){
   if(!tideChart||!lastChartPoints||!lastChartPoints.length)return;
+  if(selectedDayOffset!==0)return;
   updateNowMarkLine();
   if(nowMarkLineTimer)clearInterval(nowMarkLineTimer);
   nowMarkLineTimer=setInterval(updateNowMarkLine,60000);
 }
 function updateNowMarkLine(){
   if(!tideChart||!lastChartPoints||!lastChartPoints.length)return;
+  if(selectedDayOffset!==0){
+    tideChart.setOption({series:[{markLine:{data:[]}}]});
+    return;
+  }
   var now=new Date();
   var nowHm=("0"+now.getHours()).slice(-2)+":"+("0"+now.getMinutes()).slice(-2);
   var points=lastChartPoints;
@@ -2710,49 +2946,144 @@ function loadSdAlarm(){fetchJSON("/api/sd_alarm",45000,function(e,r){
   window._alarmData=r.data;
 });}
 
-function loadCmaAlarm(){fetchJSON("/api/cma_alarm",30000,function(e,r){
+// 统一格式化预警时间为 YYYY-MM-DD HH:MM
+function formatAlarmTime(t){
+  if(!t||t==="--")return "";
+  var s=String(t).trim();
+  if(!s)return "";
+  s=s.replace(/年|月|\/|\./g,"-").replace(/日/g," ").replace(/时/g,":").replace(/分/g,"").replace(/\s+/g," ").trim();
+  var parts=s.split(" ");
+  var d=parts[0]?parts[0].split("-"):[];
+  if(d.length<3)return t;
+  var y=parseInt(d[0]),mo=parseInt(d[1]),da=parseInt(d[2]);
+  if(isNaN(y)||isNaN(mo)||isNaN(da))return t;
+  var yStr=String(y),moStr=String(mo).padStart(2,"0"),daStr=String(da).padStart(2,"0");
+  var timePart="";
+  if(parts.length>1&&parts[1]){
+    var tp=parts[1].split(":");
+    var h=parseInt(tp[0])||0,m=parseInt(tp[1])||0;
+    timePart=" "+String(h).padStart(2,"0")+":"+String(m).padStart(2,"0");
+  }
+  return yStr+"-"+moStr+"-"+daStr+timePart;
+}
+
+function loadCmaAlarm(){
   var marquee=$("cmaAlarmMarquee");
   var bar=$("cmaAlarmBar");
+  var timeEl=$("cmaAlarmTime");
   if(!marquee)return;
-  if(!r||e||!r.data||!Array.isArray(r.data)||r.data.length===0){
-    marquee.innerHTML='<span class="cma-alarm-item item-blue">暂无预警信息</span>';
-    if(bar)bar.style.display="none";
-    return;
+  var cmaData=[],sdData=[],qdData=[],cmaDone=false,sdDone=false,qdDone=false,cmaTime="",sdTime="",qdTime="";
+  function tryRender(){
+    if(!cmaDone||!sdDone||!qdDone)return;
+    var allData=[];
+    for(var i=0;i<cmaData.length;i++){allData.push(cmaData[i]);}
+    for(var j=0;j<sdData.length;j++){allData.push(sdData[j]);}
+    for(var m=0;m<qdData.length;m++){allData.push(qdData[m]);}
+    // 按发布时间倒序排序（最新的在前）
+    function parseAlarmTime(t){
+      if(!t||t==="--")return -1;
+      var s=String(t).trim();
+      if(!s)return -1;
+      // 统一格式：替换斜杠、年月日等分隔符
+      s=s.replace(/年|月|\/|\./g,"-").replace(/日/g," ").replace(/时/g,":").replace(/\s+/g," ").trim();
+      // 提取日期和时间部分
+      var dateStr="",timeStr="";
+      var sp=s.split(" ");
+      dateStr=sp[0]||"";
+      if(sp.length>1)timeStr=sp[1]||"";
+      var d=dateStr.split("-");
+      if(d.length<3)return -1;
+      var y=parseInt(d[0]),mo=parseInt(d[1]),da=parseInt(d[2]);
+      if(isNaN(y)||isNaN(mo)||isNaN(da))return -1;
+      var h=0,mi=0,se=0;
+      if(timeStr){
+        var t2=timeStr.split(":");
+        h=parseInt(t2[0])||0;
+        mi=parseInt(t2[1])||0;
+        se=parseInt(t2[2])||0;
+      }
+      return new Date(y,mo-1,da,h,mi,se).getTime();
+    }
+    allData.sort(function(a,b){
+      var ta=parseAlarmTime(a.publish_time);
+      var tb=parseAlarmTime(b.publish_time);
+      if(ta<0&&tb<0)return 0;
+      if(ta<0)return 1;
+      if(tb<0)return -1;
+      return tb-ta;
+    });
+    // 只保留最近3天的预警
+    var threeDaysAgo=Date.now()-3*24*60*60*1000;
+    allData=allData.filter(function(item){
+      var t=parseAlarmTime(item.publish_time);
+      return t<0||t>=threeDaysAgo;
+    });
+    if(allData.length===0){
+      marquee.innerHTML='<span class="cma-alarm-item item-blue">暂无预警信息</span>';
+      if(bar)bar.style.display="none";
+      if(timeEl)timeEl.textContent="更新 --";
+      window._cmaAlarmData=[];
+      return;
+    }
+    if(bar)bar.style.display="flex";
+    var levelOrder={red:4,orange:3,yellow:2,blue:1,green:0};
+    var maxLevel="blue";
+    var html="";
+    for(var k=0;k<allData.length;k++){
+      var item=allData[k];
+      var levelCls="blue";
+      var levelText="蓝色";
+      var lv=(item.level||"")+(item.title||"");
+      if(lv.indexOf("红色")>=0){levelCls="red";levelText="红色";}
+      else if(lv.indexOf("橙色")>=0){levelCls="orange";levelText="橙色";}
+      else if(lv.indexOf("黄色")>=0){levelCls="yellow";levelText="黄色";}
+      else if(lv.indexOf("解除")>=0){levelCls="green";levelText="解除";}
+      else if(lv.indexOf("消息")>=0){levelCls="blue";levelText="消息";}
+      if(levelOrder[levelCls]>levelOrder[maxLevel])maxLevel=levelCls;
+      var title=item.title||"--";
+      var pubTime=formatAlarmTime(item.publish_time);
+      var source=item.source?"<small style=\"opacity:.45;margin-left:6px;\">["+item.source+"]</small>":"";
+      html+='<span class="cma-alarm-item item-'+levelCls+'" onclick="openCmaAlarmModal('+k+')">';
+      html+='<span class="lvl-'+levelCls+'">'+levelText+'</span>';
+      html+=title;
+      if(pubTime)html+=' <small style="opacity:.55;margin-left:4px;">'+pubTime+'</small>';
+      html+=source;
+      html+='</span>';
+    }
+    if(bar){
+      bar.classList.remove("bar-blue","bar-yellow","bar-orange","bar-red");
+      bar.classList.add("bar-"+maxLevel);
+    }
+    marquee.innerHTML=html;
+    window._cmaAlarmData=allData;
+    var latestTime=cmaTime||sdTime||qdTime;
+    if(timeEl)timeEl.textContent="更新 "+(latestTime||"--");
   }
-  if(bar)bar.style.display="flex";
-  // 计算最高预警级别并设置颜色
-  var levelOrder={red:4,orange:3,yellow:2,blue:1,green:0};
-  var maxLevel="blue";
-  var html="";
-  for(var i=0;i<r.data.length;i++){
-    var item=r.data[i];
-    var levelCls="blue";
-    var levelText="蓝色";
-    var lv=(item.level||"")+(item.title||"");
-    if(lv.indexOf("红色")>=0){levelCls="red";levelText="红色";}
-    else if(lv.indexOf("橙色")>=0){levelCls="orange";levelText="橙色";}
-    else if(lv.indexOf("黄色")>=0){levelCls="yellow";levelText="黄色";}
-    else if(lv.indexOf("解除")>=0){levelCls="green";levelText="解除";}
-    else if(lv.indexOf("消息")>=0){levelCls="blue";levelText="消息";}
-    if(levelOrder[levelCls]>levelOrder[maxLevel])maxLevel=levelCls;
-    var title=item.title||"--";
-    var pubTime=item.publish_time||"";
-    var source=item.source?"<small style=\"opacity:.45;margin-left:6px;\">["+item.source+"]</small>":"";
-    html+='<span class="cma-alarm-item item-'+levelCls+'" onclick="openCmaAlarmModal('+i+')">';
-    html+='<span class="lvl-'+levelCls+'">'+levelText+'</span>';
-    html+=title;
-    if(pubTime)html+=' <small style="opacity:.55;margin-left:4px;">'+pubTime+'</small>';
-    html+=source;
-    html+='</span>';
-  }
-  // 设置预警条颜色
-  if(bar){
-    bar.classList.remove("bar-blue","bar-yellow","bar-orange","bar-red");
-    bar.classList.add("bar-"+maxLevel);
-  }
-  marquee.innerHTML=html;
-  window._cmaAlarmData=r.data;
-});}
+  fetchJSON("/api/cma_alarm",30000,function(e,r){
+    cmaDone=true;
+    if(!e&&r&&r.data&&Array.isArray(r.data)){
+      cmaData=r.data;
+      cmaTime=r.updateTime||"";
+    }
+    tryRender();
+  });
+  fetchJSON("/api/sd_alarm",45000,function(e,r){
+    sdDone=true;
+    if(!e&&r&&r.data&&Array.isArray(r.data)){
+      sdData=r.data.map(function(it){if(!it.source)it.source="山东省气象台";return it;});
+      sdTime=r.updateTime||"";
+    }
+    tryRender();
+  });
+  fetchJSON("/api/alarm",30000,function(e,r){
+    qdDone=true;
+    if(!e&&r&&r.data&&Array.isArray(r.data)){
+      qdData=r.data.map(function(it){it.source="青岛海洋预报台";return it;});
+      qdTime=r.updateTime||"";
+    }
+    tryRender();
+  });
+}
 
 function openCmaAlarmModal(index){
   var data=window._cmaAlarmData||[];
@@ -2762,7 +3093,7 @@ function openCmaAlarmModal(index){
   if(!modal){return;}
   modal.style.display="flex";
   $("alarmModalTitle").textContent=item.title||"预警详情";
-  $("alarmModalTime").textContent=item.publish_time&&item.publish_time!=="--"?item.publish_time:"--";
+  $("alarmModalTime").textContent=formatAlarmTime(item.publish_time)||"--";
   var linkEl=$("alarmModalLink");
   if(item.url){
     _currentAlarmUrl=item.url;
@@ -2783,6 +3114,12 @@ function openCmaAlarmModal(index){
   bodyHtml+="<div id=\"alarmDetailContent\" style=\"margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1);color:rgba(232,234,246,.75);line-height:1.8;\"><em style=\"color:rgba(232,234,246,.4);\">正在加载详情...</em></div>";
   $("alarmModalBody").innerHTML=bodyHtml;
   
+  // 青岛海洋预报台docx文件直接提示查看原文
+  var isDocx=item.url&&(item.url.indexOf("Alermfile.aspx")>=0||item.url.toLowerCase().indexOf(".docx")>=0||item.url.toLowerCase().indexOf(".doc")>=0);
+  if(isDocx){
+    $("alarmDetailContent").innerHTML="<p style=\"color:rgba(232,234,246,.7);\">预警详情为文档格式，请点击下方「查看原文」按钮打开。</p>";
+    return;
+  }
   // 加载预警详情内容
   if(item.url){
     var detailUrl="/api/cma_alarm_detail?url="+encodeURIComponent(item.url);
@@ -2821,7 +3158,7 @@ function openAlarmModal(index){
   if(!modal){return;}
   modal.style.display="flex";
   $("alarmModalTitle").textContent=item.title||"预警详情";
-  $("alarmModalTime").textContent=item.publish_time&&item.publish_time!=="--"?item.publish_time:"--";
+  $("alarmModalTime").textContent=formatAlarmTime(item.publish_time)||"--";
   _currentAlarmUrl=item.url||"";
   var sdLinkEl=$("alarmModalLink");
   if(item.url){
@@ -2852,7 +3189,7 @@ function openAlarmModal(index){
       $("alarmModalTitle").textContent=r.data.title;
     }
     if(r.data.pub_time&&r.data.pub_time!=="--"){
-      $("alarmModalTime").textContent=r.data.pub_time;
+      $("alarmModalTime").textContent=formatAlarmTime(r.data.pub_time);
     }
     $("alarmModalBody").innerHTML=html;
   });
@@ -2912,7 +3249,7 @@ function boot(){
   updateClock(); setInterval(updateClock,1000);
   updateDayButtons();
   loadTide(); loadChart(); loadWeather(); loadWave(); loadOffshoreWave(); loadCmaAlarm(); loadSdAlarm();
-  setInterval(loadTide,60*60*1000); setInterval(loadChart,6*60*60*1000); setInterval(loadWeather,10*60*1000); setInterval(loadWave,60*60*1000); setInterval(loadOffshoreWave,60*60*1000); setInterval(loadCmaAlarm,5*60*1000); setInterval(loadSdAlarm,10*60*1000);
+  setInterval(loadTide,60*60*1000); setInterval(loadChart,6*60*60*1000); setInterval(loadWeather,10*60*1000); setInterval(loadWave,60*60*1000); setInterval(loadOffshoreWave,60*60*1000); setInterval(loadCmaAlarm,5*60*1000); setInterval(loadSdAlarm,5*60*1000);
   setInterval(function(){if(lastTideList.length)calcTideStatus(lastTideList);},60*1000);
   // 每分钟更新海况卡片中的紫外线指数
   setInterval(function(){
