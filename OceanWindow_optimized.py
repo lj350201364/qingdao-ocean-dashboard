@@ -2806,7 +2806,13 @@ function parseChartPoints(rawArr){
     return {dateKey:normalizeDateKey(it&&it.TIDEDATE||""),label:parsed.label,minute:parsed.minute,value:isNaN(val)?0:val,pointType:it&&it.POINT_TYPE||"hour",extremaType:it&&it.EXTREMA_TYPE||""};
   }).filter(Boolean);
   var day=todayKey(); var points=all.filter(function(p){return p.dateKey===day;}); if(points.length===0&&all.length>0)points=all.filter(function(p){return p.dateKey===all[0].dateKey;});
-  return points.sort(function(a,b){return a.minute-b.minute;});
+  points.sort(function(a,b){return a.minute-b.minute;});
+  // 如果最后一个点不足23:59，补充一个23:59的点，使X轴延伸到全天结束
+  if(points.length>0&&points[points.length-1].minute<1439){
+    var last=points[points.length-1];
+    points.push({dateKey:last.dateKey,label:"23:59",minute:1439,value:last.value,pointType:last.pointType,extremaType:""});
+  }
+  return points;
 }
 function adaptiveChartFont(base,min,max){var scale=Math.min(window.innerWidth/1280,window.innerHeight/760);return Math.max(min,Math.min(max,Math.round(base*scale)));}
 function initChart(){
