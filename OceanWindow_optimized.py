@@ -1966,24 +1966,31 @@ body{
 .weather-icon.fog::before,.weather-icon.fog::after{left:8px;right:8px;height:3px;border-radius:999px;background:rgba(232,234,246,.75);box-shadow:0 9px 0 rgba(232,234,246,.52),0 18px 0 rgba(232,234,246,.38);animation:fogMove 2.8s ease-in-out infinite;}
 .weather-icon.fog::before{top:12px}.weather-icon.fog::after{top:18px;animation-delay:.8s;opacity:.6;}
 .weather-icon.snow::after{content:"✦";left:12px;top:27px;color:#e8f8ff;font-size:12px;text-shadow:11px -3px 0 #e8f8ff,20px 4px 0 #e8f8ff;animation:snowFall 1.9s linear infinite;}
-.status-big{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
-.status-big>div:first-child{min-width:0;padding-right:8px;}
+.status-big{position:relative;z-index:2;display:flex;flex-direction:column;margin-bottom:6px;gap:5px;flex:0 0 auto;}
+.status-inline-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.status-inline-row .status-badge{font-size:calc(var(--fs-badge) * 1.15);padding:6px 16px;}
+.level-inline{display:flex;align-items:baseline;gap:5px;flex:0 0 auto;}
+.level-inline-label{font-size:var(--fs-label);color:rgba(232,234,246,.55);font-weight:600;letter-spacing:.05em;white-space:nowrap;}
+.level-inline .level-number{font-size:calc(var(--fs-large) * 1.2);line-height:1.05;white-space:nowrap;animation:dataPulse 3.8s ease-in-out infinite;}
+.level-inline .level-number small{font-size:var(--fs-value);color:rgba(232,234,246,0.66);margin-left:3px;}
 .status-badge{display:inline-flex;align-items:center;padding:6px 16px;border-radius:999px;background:rgba(0,229,255,.13);border:1px solid rgba(0,229,255,.35);color:#00e5ff;font-size:var(--fs-badge);font-weight:700;animation:badgePulse 2s ease-in-out infinite;text-shadow:0 0 10px rgba(0,229,255,.5);letter-spacing:.06em;}
 .status-badge.rising{background:linear-gradient(135deg,rgba(255,171,0,.2),rgba(255,235,59,.12));border-color:rgba(255,171,0,.5);color:#ffd54f;text-shadow:0 0 12px rgba(255,171,0,.6);animation:badgePulseRising 1.8s ease-in-out infinite;}
 .status-badge.falling{background:linear-gradient(135deg,rgba(0,229,255,.2),rgba(0,188,212,.12));border-color:rgba(0,229,255,.5);color:#4dd0e1;text-shadow:0 0 12px rgba(0,229,255,.6);animation:badgePulse 2s ease-in-out infinite;}
-.status-text{font-size:var(--fs-label);color:rgba(232,234,246,0.66);margin-top:6px;line-height:1.35;}
+.status-text{font-size:var(--fs-label);color:rgba(232,234,246,0.66);line-height:1.35;}
 .level-number{font-size:var(--fs-large);line-height:1.05;white-space:nowrap;animation:dataPulse 3.8s ease-in-out infinite;}
 .level-number small{font-size:var(--fs-value);color:rgba(232,234,246,0.66);margin-left:3px;}
-.level-number-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:0 0 auto;}
-.level-number-label{font-size:var(--fs-label);color:rgba(232,234,246,.55);font-weight:600;letter-spacing:.05em;}
 .mini-tide{position:relative;z-index:2;display:flex;margin-bottom:0;}
 .mini-box{position:relative;overflow:hidden;background:rgba(6,10,20,.72);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:7px 8px;}
 .mini-box .label{font-size:var(--fs-label);color:rgba(232,234,246,.78);margin-bottom:3px;font-weight:600;letter-spacing:.03em;}
 .mini-box .value{font-size:var(--fs-value);color:#00e5ff;font-weight:800;text-shadow:0 0 8px rgba(0,229,255,.32);white-space:nowrap;}
 .tide-status-row{position:relative;z-index:2;display:flex;flex:1;gap:8px;min-height:0;}
-.tide-status-left{position:relative;z-index:2;display:flex;flex-direction:column;flex:1;min-width:0;min-height:0;}
-.tide-status-left .status-big{margin-bottom:6px;flex:1;}
+.tide-status-left{position:relative;z-index:2;display:flex;flex-direction:column;flex:1;min-width:0;min-height:0;gap:6px;}
+.tide-status-left .status-big{margin-bottom:0;flex:2;justify-content:center;}
 .tide-status-left .mini-tide{margin-bottom:0;flex-shrink:0;}
+.tide-extreme-row{position:relative;z-index:2;display:flex;gap:6px;flex:1;min-height:0;}
+.tide-extreme-box{position:relative;overflow:hidden;background:rgba(6,10,20,.72);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:7px 9px;flex:1;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;}
+.tide-extreme-box .label{font-size:var(--fs-label);color:rgba(232,234,246,.78);margin-bottom:3px;font-weight:600;letter-spacing:.03em;}
+.tide-extreme-box .value{font-size:var(--fs-value);color:#00e5ff;font-weight:800;text-shadow:0 0 8px rgba(0,229,255,.32);white-space:nowrap;}
 .tide-extra{position:relative;z-index:2;display:flex;flex-direction:column;flex:1;min-width:0;min-height:0;gap:6px;}
 .extra-row{position:relative;z-index:2;display:flex;gap:6px;flex:1;min-height:0;}
 .extra-row .extra-box{flex:1;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:6px 10px;min-height:0;}
@@ -2136,8 +2143,13 @@ html.mobile .temp-card.primary .value{font-size:22px;}
 html.mobile .weather-current-temp{font-size:22px;}
 html.mobile .weather-hero-right .label{font-size:12px;}
 html.mobile .status-badge{font-size:14px;padding:5px 12px;}
+html.mobile .status-inline-row .status-badge{font-size:16px;padding:6px 14px;}
 html.mobile .level-number{font-size:24px;}
 html.mobile .level-number small{font-size:14px;}
+html.mobile .level-inline .level-number{font-size:28px;}
+html.mobile .level-inline .level-number small{font-size:14px;}
+html.mobile .tide-extreme-box .label{font-size:11px;}
+html.mobile .tide-extreme-box .value{font-size:13px;}
 html.mobile .mini-box .label{font-size:11px;}
 html.mobile .mini-box .value{font-size:13px;}
 html.mobile .extra-box .label{font-size:11px;}
@@ -2252,32 +2264,31 @@ html.mobile .beach-list-body{gap:6px;grid-template-columns:repeat(2,1fr);}</styl
         <div class="tide-status-row">
           <div class="tide-status-left">
             <div class="status-big" id="tideCardContent">
-              <div>
+              <div class="status-inline-row">
                 <span id="tideBadge" class="status-badge">等待加载</span>
-                <div id="tideStatusText" class="status-text">正在获取青岛潮汐数据</div>
-              </div>
-              <div class="level-number-wrap">
-                <div class="level-number-label">当前潮高</div>
-                <div class="level-number data-value"><span id="currentLevel">--</span><small>cm</small></div>
+                <div class="level-inline">
+                  <span class="level-inline-label">当前潮高</span>
+                  <span id="currentLevel" class="level-number data-value">--</span><small>cm</small>
+                </div>
               </div>
             </div>
-            <div class="mini-tide">
-              <div class="mini-box"><div class="label">下次高潮</div><div id="nextHigh" class="value">--</div></div>
-              <div class="mini-box"><div class="label">下次低潮</div><div id="nextLow" class="value">--</div></div>
+            <div class="tide-extreme-row">
+              <div class="tide-extreme-box"><div class="label">当日最高潮位</div><div id="todayHighLevel" class="value">--</div></div>
+              <div class="tide-extreme-box"><div class="label">当日最低潮位</div><div id="todayLowLevel" class="value">--</div></div>
             </div>
           </div>
           <div class="tide-extra">
-            <div class="extra-row">
-              <div class="extra-box"><div class="label">当前趋势</div><div id="tideTrend" class="value">--</div></div>
-              <div class="extra-box"><div class="label">当前潮段</div><div id="tidePhase" class="value">--</div></div>
-            </div>
             <div class="extra-row">
               <div class="extra-box"><div class="label">潮段进度</div><div id="tideProgress" class="value">--</div></div>
               <div class="extra-box"><div class="label">今日潮差</div><div id="tideRange" class="value">--</div></div>
             </div>
             <div class="extra-row">
-              <div class="extra-box"><div class="label">距低潮</div><div id="lowDelta" class="value">--</div></div>
+              <div class="extra-box"><div class="label">下次高潮</div><div id="nextHigh" class="value">--</div></div>
+              <div class="extra-box"><div class="label">下次低潮</div><div id="nextLow" class="value">--</div></div>
+            </div>
+            <div class="extra-row">
               <div class="extra-box"><div class="label">距高潮</div><div id="highDelta" class="value">--</div></div>
+              <div class="extra-box"><div class="label">距低潮</div><div id="lowDelta" class="value">--</div></div>
             </div>
           </div>
         </div>
@@ -2683,7 +2694,6 @@ function calcTideStatus(list){
       badgeEl.classList.add(rising?"rising":"falling");
     }
   }
-  setText("tideTrend",rising?"水位上升":"水位下降");
   if(selectedDayOffset===0&&lastTideRising!==null&&rising&&!lastTideRising&&soundEnabled){playRisingSound();}
   lastTideRising=rising;
   if(next){
@@ -2691,18 +2701,15 @@ function calcTideStatus(list){
     setText("tideStatusText",nextPrefix+"下一次"+next.type+" "+next.time+"，潮位 "+next.height+" cm");
     setText("nextTideDelta",formatDuration(next.min-nowMin));
     if(prev&&prev.min<nowMin&&prev.min<next.min){
-      setText("tidePhase",prev.type+"→"+next.type);
       var phaseTotal=Math.max(1,next.min-prev.min);
       var phaseProgress=Math.max(0,Math.min(100,Math.round((nowMin-prev.min)/phaseTotal*100)));
       setText("tideProgress",phaseProgress+"%");
     }else{
-      setText("tidePhase","等待"+next.type);
       setText("tideProgress","0%");
     }
   }else{
     setText("tideStatusText",selectedDayLabel()+"后续无高低潮预报");
     setText("nextTideDelta",selectedDayLabel()+"无");
-    setText("tidePhase",selectedDayLabel()+"末段");
     setText("tideProgress","--");
   }
   var currentLevel=interpolateCurrentLevel(curve,nowMin);
@@ -2785,11 +2792,13 @@ function formatDuration(minutes){
   return h+"小时"+(m>0?m+"分":"");
 }
 function renderTideSummary(pts){
-  if(!pts||!pts.length){setText("tideRange","--");return;}
+  if(!pts||!pts.length){setText("tideRange","--");setText("todayHighLevel","--");setText("todayLowLevel","--");return;}
   var heights=pts.map(function(p){return p.height;}).filter(function(v){return !isNaN(v);});
-  if(!heights.length){setText("tideRange","--");return;}
+  if(!heights.length){setText("tideRange","--");setText("todayHighLevel","--");setText("todayLowLevel","--");return;}
   var max=Math.max.apply(null,heights), min=Math.min.apply(null,heights);
   setText("tideRange",Math.round(max-min)+" cm");
+  setText("todayHighLevel",Math.round(max)+" cm");
+  setText("todayLowLevel",Math.round(min)+" cm");
 }
 function parseChartPoints(rawArr){
   var arr=Array.isArray(rawArr)?rawArr:[]; var all=arr.map(function(it){
@@ -2896,7 +2905,7 @@ function showWaveUnavailable(){
 }
 function showTideUnavailable(){
   clearModuleUnavailable("tideCard");
-  setAllText(["tideBadge","tideStatusText","nextHigh","nextLow","currentLevel","tideTrend","tidePhase","tideProgress","highDelta","lowDelta","tideRange"],"未知");
+  setAllText(["tideBadge","tideStatusText","nextHigh","nextLow","currentLevel","tideProgress","highDelta","lowDelta","tideRange","todayHighLevel","todayLowLevel"],"未知");
   setText("tideUpdate","暂无明日数据"); setText("globalUpdate","数据更新 --");
 }
 function showChartUnavailable(){
@@ -3315,5 +3324,3 @@ if __name__ == "__main__":
     )
     webview.start()
     stop_server()
-
- 
