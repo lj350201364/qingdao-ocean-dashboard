@@ -37,7 +37,6 @@ cache = {
     "wave": None,
     "offshore_wave": None,
     "offshore_wave_tomorrow": None,
-    "weather": None,
     "alarm": [],
     "sd_alarm": [],
     "cma_alarm": [],
@@ -2160,7 +2159,35 @@ html.mobile .beach-item{font-size:12px;padding:8px 10px;gap:4px;}
 html.mobile .beach-item .beach-name{font-size:13px;}
 html.mobile .beach-item .beach-status{font-size:11px;}
 html.mobile .beach-item-detail{font-size:11px;gap:12px;}
-html.mobile .beach-list-body{gap:6px;grid-template-columns:repeat(2,1fr);}</style>
+html.mobile .beach-list-body{gap:6px;grid-template-columns:repeat(2,1fr);}
+
+/* 2026 UI refinement: calmer hierarchy, clearer focus and robust sizing. */
+:root{
+  --surface:rgba(12,20,38,.88);--surface-strong:rgba(7,14,29,.96);
+  --line:rgba(111,224,255,.16);--line-strong:rgba(111,224,255,.34);
+  --text:#f3f7ff;--muted:#9eabc2;--accent:#42d7f5;
+}
+body{background:radial-gradient(circle at 14% -8%,rgba(32,155,196,.22),transparent 34%),radial-gradient(circle at 92% 8%,rgba(63,81,181,.14),transparent 28%),#07101f;color:var(--text)}
+.topbar{height:64px;flex-basis:64px;padding:0 22px;background:rgba(6,13,27,.9);backdrop-filter:blur(18px);border-bottom-color:var(--line)}
+.brand-code{font-size:13px;letter-spacing:.12em}.brand-title{font-size:13px;color:var(--muted)}
+.top-actions{padding:4px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);border-radius:999px}
+.sound-btn,.refresh-btn,.day-btn{min-height:32px;padding:6px 12px;border-color:transparent;background:transparent;box-shadow:none;color:var(--muted);transition:background .18s,color .18s,border-color .18s,transform .18s}
+.sound-btn:hover,.refresh-btn:hover,.day-btn:hover{background:rgba(66,215,245,.1);color:var(--text)}
+.sound-btn:focus-visible,.refresh-btn:focus-visible,.day-btn:focus-visible,.btn:focus-visible,.alarm-modal-close:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.refresh-btn{background:rgba(66,215,245,.1);color:var(--accent)}.day-btn.active{background:var(--accent);color:#04202a;border-color:transparent;font-weight:800}
+.content{height:calc(100vh - 94px);padding:14px;gap:14px}.content>.row-main,.content>.row-bottom{margin-bottom:0}.row-main,.row-bottom,.left-stack-card,.right-bottom-stack{gap:14px}
+.card{padding:14px;border-radius:14px;background:linear-gradient(145deg,var(--surface),rgba(8,15,30,.82));border-color:var(--line);box-shadow:0 12px 32px rgba(0,0,0,.28);animation:none}
+.card::after{display:none}.card::before{opacity:.45}.right-stack-card>.card,.left-stack-card>.card{border-radius:14px}
+.module-title{font-size:12px;color:var(--text);letter-spacing:.08em;padding-bottom:9px;margin-bottom:10px}.module-title span:first-child{color:var(--text)}.module-title::before{background:var(--accent);animation:none}.module-title small,.module-title small.update-time{color:var(--muted)}
+.metric,.weather-hero-left,.weather-hero-right,.temp-card,.mini-box,.extra-box{background:rgba(4,11,24,.56);border-color:rgba(255,255,255,.075)}
+.metric::after,.temp-card::after,.mini-box::after,.extra-box::after{display:none}.metric strong,.data-value{color:var(--accent);animation:none;text-shadow:none}
+.cma-alarm-bar{height:30px;background:rgba(6,13,27,.86);border-bottom-color:var(--line)}
+.map-shell,#tideChart{border-radius:10px}.alarm-list-item{transition:background .18s,border-color .18s,transform .18s}
+button:disabled{cursor:wait;opacity:.65}.refresh-btn.is-loading{color:var(--text)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+@media (max-width:1079px){html:not(.mobile) .content{height:calc(100vh - 94px);overflow:auto}.row-main,.row-bottom{min-height:520px}}
+@media (max-height:740px) and (min-width:1080px){.topbar{height:56px;flex-basis:56px}.content{height:calc(100vh - 86px);padding:10px;gap:10px}.row-main,.row-bottom,.left-stack-card,.right-bottom-stack{gap:10px}.card{padding:10px}.module-title{margin-bottom:8px;padding-bottom:7px}}
+</style>
 </head>
 <body>
 <div class="app">
@@ -2171,10 +2198,10 @@ html.mobile .beach-list-body{gap:6px;grid-template-columns:repeat(2,1fr);}</styl
     </div>
     <div class="live"><span class="live-dot"></span><span>实时在线</span><span id="globalUpdate">数据更新 --</span></div>
     <div class="top-actions">
-      <button id="todayBtn" class="day-btn active" onclick="switchForecastDay(0)">今日</button>
-      <button id="tomorrowBtn" class="day-btn" onclick="switchForecastDay(1)">明日</button>
-      <button id="refreshBtn" class="refresh-btn" onclick="refreshAllData()">🔄 刷新</button>
-      <button id="soundBtn" class="sound-btn" onclick="toggleSound()">🔇 <span>声音关</span></button>
+      <button id="todayBtn" class="day-btn active" type="button" aria-pressed="true" onclick="switchForecastDay(0)">今日</button>
+      <button id="tomorrowBtn" class="day-btn" type="button" aria-pressed="false" onclick="switchForecastDay(1)">明日</button>
+      <button id="refreshBtn" class="refresh-btn" type="button" aria-label="刷新全部数据" onclick="refreshAllData()">↻ 刷新</button>
+      <button id="soundBtn" class="sound-btn" type="button" aria-label="切换提示音" aria-pressed="false" onclick="toggleSound()">🔇 <span>声音关</span></button>
     </div>
     <div class="top-clock"><div id="dateText" class="top-date">--</div><div id="nowTime" class="top-time">--:--:--</div></div>
   </header>
@@ -2402,8 +2429,8 @@ function apiUrl(path){
 }
 function updateDayButtons(){
   var today=$("todayBtn"), tomorrow=$("tomorrowBtn");
-  if(today){if(selectedDayOffset===0){today.classList.add("active");}else{today.classList.remove("active");}}
-  if(tomorrow){if(selectedDayOffset===1){tomorrow.classList.add("active");}else{tomorrow.classList.remove("active");}}
+  if(today){if(selectedDayOffset===0){today.classList.add("active");}else{today.classList.remove("active");}today.setAttribute("aria-pressed",selectedDayOffset===0?"true":"false");}
+  if(tomorrow){if(selectedDayOffset===1){tomorrow.classList.add("active");}else{tomorrow.classList.remove("active");}tomorrow.setAttribute("aria-pressed",selectedDayOffset===1?"true":"false");}
   setText("chartTitle","青岛"+selectedDayLabel()+"潮汐曲线");
   setText("airTempLabel",selectedDayOffset===0?"当前气温":"明日最高");
   setText("tempRangeLabel",selectedDayLabel()+"温度");
@@ -2783,6 +2810,7 @@ function toggleSound(){
   soundEnabled=!soundEnabled; initAudio();
   var btn=$("soundBtn"); if(btn){
     btn.innerHTML=soundEnabled?'🔊 <span>声音开</span>':'🔇 <span>声音关</span>';
+    btn.setAttribute("aria-pressed",soundEnabled?"true":"false");
   }
 }
 function formatDuration(minutes){
@@ -3246,12 +3274,12 @@ function loadTide(){fetchJSON(apiUrl("/api/tide"),20000,function(e,r){if(!r||e)r
 function loadChart(){fetchJSON(apiUrl("/api/tideChart"),20000,function(e,r){if(!r||e){renderChart([],"潮汐曲线加载失败",null);return;}if(r&&r.tomorrow_unavailable){showChartUnavailable();return;}setText("chartTime","更新 "+(r.updateTime||"--"));renderChart(r.chart,r.msg,r.site);});}
 function refreshAllData(){
   var btn=$("refreshBtn");
-  if(btn){btn.disabled=true;btn.textContent="刷新中...";}
+  if(btn){btn.disabled=true;btn.classList.add("is-loading");btn.textContent="↻ 刷新中";}
   loadTide();loadChart();loadWeather();loadWave();loadOffshoreWave();loadCmaAlarm();
   setTimeout(function(){
     reloadTyphoonFrame();
-    if(btn)btn.textContent="刷新完成";
-    setTimeout(function(){if(btn){btn.textContent="🔄 刷新";btn.disabled=false;}},1200);
+    if(btn)btn.textContent="✓ 已更新";
+    setTimeout(function(){if(btn){btn.textContent="↻ 刷新";btn.disabled=false;btn.classList.remove("is-loading");}},1200);
   },2000);
 }
 function boot(){
