@@ -1774,15 +1774,17 @@ HTML = r"""
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;}
 :root{
-  --fs-module-title:clamp(10px,0.7vw,12px);
-  --fs-label:clamp(9px,0.65vw,11px);
-  --fs-value:clamp(11px,0.8vw,14px);
-  --fs-large:clamp(16px,1.4vw,22px);
-  --fs-table:clamp(9px,0.65vw,12px);
-  --fs-badge:clamp(12px,0.9vw,16px);
-  --fs-topbar-code:clamp(10px,0.75vw,13px);
-  --fs-topbar-title:clamp(10px,0.7vw,12px);
-  --fs-topbar-clock:clamp(14px,1.2vw,20px);
+  --fs-module-title:clamp(12px,0.85vw,15px);
+  --fs-label:clamp(11px,0.78vw,14px);
+  --fs-label-big:clamp(12px,0.85vw,16px);
+  --fs-value:clamp(13px,0.95vw,17px);
+  --fs-value-big:clamp(16px,1.25vw,22px);
+  --fs-large:clamp(18px,1.6vw,26px);
+  --fs-table:clamp(11px,0.78vw,14px);
+  --fs-badge:clamp(14px,1.0vw,18px);
+  --fs-topbar-code:clamp(12px,0.85vw,15px);
+  --fs-topbar-title:clamp(12px,0.8vw,14px);
+  --fs-topbar-clock:clamp(16px,1.4vw,24px);
 }
 html,body{width:100%;height:100%;overflow:hidden;background:#0a0e1a;color:#e8eaf6;}
 body{
@@ -1831,8 +1833,7 @@ body{
 @keyframes tableScan{0%,100%{background-color:transparent}50%{background-color:rgba(0,229,255,.10)}}
 @keyframes chartAura{0%,100%{opacity:.22;transform:translateX(-8%)}50%{opacity:.48;transform:translateX(8%)}}
 .content{height:calc(100vh - 56px);padding:16px;display:flex;flex-direction:column;position:relative;overflow:hidden;}
-.row-main{display:flex;flex:7;min-height:0;gap:16px;}
-.row-bottom{display:flex;flex:3;min-height:0;gap:16px;}
+.row-main{display:flex;flex:1;min-height:0;gap:16px;}
 .card{
   position:relative;min-width:0;min-height:0;overflow:hidden;padding:16px;border-radius:12px;
   background:rgba(15,21,40,0.86);border:1px solid rgba(0,229,255,0.16);box-shadow:0 8px 24px rgba(0,0,0,0.55),0 0 22px rgba(0,229,255,0.18);
@@ -1840,13 +1841,16 @@ body{
 }
 .card::before{content:"";position:absolute;top:0;right:0;bottom:0;left:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,229,255,.012) 2px,rgba(0,229,255,.012) 4px);pointer-events:none;z-index:1;}
 .card::after{content:"";position:absolute;left:0;right:0;top:0;height:42%;background:linear-gradient(180deg,transparent,rgba(0,229,255,.08),transparent);pointer-events:none;z-index:1;animation:scanLine 7s linear infinite;}
-.right-stack-card{display:flex;flex-direction:column;gap:0;border:none;background:none;box-shadow:none;animation:none;padding:0;overflow:visible;min-height:0;flex:2;}
+.right-stack-card{display:flex;flex-direction:column;gap:16px;border:none;background:none;box-shadow:none;animation:none;padding:0;overflow:visible;min-height:0;flex:2;}
 .right-stack-card::before,.right-stack-card::after{display:none;}
-.right-stack-card>.card{border-radius:12px;height:100%;}
+.right-stack-card>.card{border-radius:12px;margin-right:0;}
+.right-stack-card>.map-card{flex:7;min-height:0;}
+.right-stack-card>.chart-card{flex:3;min-height:0;}
 .left-stack-card{display:flex;flex-direction:column;gap:16px;border:none;background:none;box-shadow:none;animation:none;padding:0;overflow:visible;min-height:0;min-width:0;flex:1;}
 .left-stack-card::before,.left-stack-card::after{display:none;}
 .left-stack-card>.card{border-radius:12px;margin-right:0;}
-.left-stack-card>.weather-card{flex:0 0 auto;min-height:0;}
+.left-stack-card>.weather-card{flex:4;min-height:0;}
+.left-stack-card>.tide-card{flex:6;min-height:0;}
 .left-stack-card>.alarm-list-card{flex:1;min-height:0;}
 .map-card{min-width:0;width:100%;}
 .alarm-bar{position:relative;z-index:20;display:flex;align-items:center;height:30px;padding:0 16px;background:rgba(255,43,43,.18);border-bottom:1px solid rgba(255,43,43,.35);overflow:hidden;}
@@ -1901,7 +1905,6 @@ body{
 .cma-alarm-item .lvl-orange{display:inline-block;padding:2px 8px;border-radius:4px;font-size:calc(var(--fs-label) - 1px);font-weight:700;background:rgba(255,152,0,.75);color:#fff;border:1px solid rgba(255,167,38,.95);margin-right:6px;text-shadow:0 1px 2px rgba(0,0,0,.4);box-shadow:0 0 6px rgba(255,152,0,.4);}
 .cma-alarm-item .lvl-red{display:inline-block;padding:2px 8px;border-radius:4px;font-size:calc(var(--fs-label) - 1px);font-weight:700;background:rgba(244,67,54,.8);color:#fff;border:1px solid rgba(255,82,82,.95);margin-right:6px;text-shadow:0 1px 2px rgba(0,0,0,.4);box-shadow:0 0 8px rgba(244,67,54,.5);}
 .cma-alarm-item .lvl-green{display:inline-block;padding:2px 8px;border-radius:4px;font-size:calc(var(--fs-label) - 1px);font-weight:700;background:rgba(0,230,118,.6);color:#fff;border:1px solid rgba(105,240,174,.9);margin-right:6px;text-shadow:0 1px 2px rgba(0,0,0,.4);box-shadow:0 0 6px rgba(0,230,118,.35);}
-.left-stack-card>.sea-card{flex:1;min-height:0;}
 .corner{position:absolute;width:18px;height:18px;border-color:#00e5ff;opacity:.72;z-index:2;}
 .tl{display:none}.tr{right:8px;top:8px;border-right:1px solid;border-top:1px solid}
 .bl{left:8px;bottom:8px;border-left:1px solid;border-bottom:1px solid}.br{right:8px;bottom:8px;border-right:1px solid;border-bottom:1px solid}
@@ -1932,28 +1935,25 @@ body{
 .metric .label{font-size:var(--fs-label);color:rgba(232,234,246,.78);margin-bottom:6px;line-height:1.35;font-weight:600;letter-spacing:.03em;}
 .metric strong{position:relative;z-index:1;font-size:var(--fs-value);color:#00e5ff;text-shadow:0 0 8px rgba(0,229,255,.32);white-space:nowrap;animation:dataPulse 4.8s ease-in-out infinite;}
 .wind-compass-wrap{position:relative;z-index:1;display:flex;align-items:center;gap:8px;min-width:0;}
-.wind-compass{position:relative;flex:0 0 34px;width:34px;height:34px;border-radius:50%;border:1px solid rgba(0,229,255,.42);background:radial-gradient(circle,rgba(0,229,255,.16),rgba(6,10,20,.72));box-shadow:inset 0 0 10px rgba(0,229,255,.16),0 0 12px rgba(0,229,255,.14);}
-.wind-compass::before{content:"N";position:absolute;top:1px;left:50%;transform:translateX(-50%);font-size:8px;color:rgba(232,234,246,.72);font-weight:800;}
-.wind-needle{position:absolute;left:50%;top:50%;width:3px;height:22px;margin-left:-1.5px;margin-top:-11px;transform:rotate(0deg);transition:transform .9s cubic-bezier(.2,.8,.2,1);transform-origin:50% 50%;}
-.wind-needle::before{content:"";position:absolute;left:50%;top:0;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:13px solid #ffab00;-webkit-filter:drop-shadow(0 0 7px rgba(255,171,0,.8));}
-.wind-needle::after{content:"";position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:10px solid rgba(0,229,255,.68);}
-.wind-text{min-width:0;font-size:var(--fs-value);color:#00e5ff;font-weight:800;text-shadow:0 0 8px rgba(0,229,255,.32);white-space:nowrap;}
-.temp-strip{position:relative;z-index:2;margin-bottom:12px;display:flex;flex-wrap:wrap;min-width:0;}
-.temp-card{position:relative;overflow:hidden;min-width:0;border-radius:9px;padding:10px;background:rgba(6,10,20,.74);border:1px solid rgba(255,255,255,.08);}
-.temp-card .label{font-size:var(--fs-label);color:rgba(232,234,246,.78);font-weight:600;margin-bottom:5px;line-height:1.35;}
-.temp-card .value{position:relative;z-index:1;font-size:var(--fs-value);line-height:1.05;color:#00e5ff;font-weight:800;text-shadow:0 0 8px rgba(0,229,255,.34);white-space:nowrap;animation:dataPulse 4.2s ease-in-out infinite;}
+.wind-compass{position:relative;flex:0 0 44px;width:44px;height:44px;border-radius:50%;border:1px solid rgba(0,229,255,.42);background:radial-gradient(circle,rgba(0,229,255,.16),rgba(6,10,20,.72));box-shadow:inset 0 0 10px rgba(0,229,255,.16),0 0 12px rgba(0,229,255,.14);}
+.wind-compass::before{content:"N";position:absolute;top:1px;left:50%;transform:translateX(-50%);font-size:9px;color:rgba(232,234,246,.72);font-weight:800;}
+.wind-needle{position:absolute;left:50%;top:50%;width:3px;height:28px;margin-left:-1.5px;margin-top:-14px;transform:rotate(0deg);transition:transform .9s cubic-bezier(.2,.8,.2,1);transform-origin:50% 50%;}
+.wind-needle::before{content:"";position:absolute;left:50%;top:0;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:16px solid #ffab00;-webkit-filter:drop-shadow(0 0 7px rgba(255,171,0,.8));}
+.wind-needle::after{content:"";position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:12px solid rgba(0,229,255,.68);}
+.wind-text{min-width:0;font-size:clamp(17px,1.25vw,23px);color:#00e5ff;font-weight:800;text-shadow:0 0 8px rgba(0,229,255,.32);white-space:nowrap;}
+.temp-strip{position:relative;z-index:2;margin-bottom:12px;display:flex;flex-wrap:wrap;min-width:0;flex-shrink:0;}
+.temp-card{position:relative;overflow:hidden;min-width:0;flex:1;border-radius:9px;padding:10px;background:rgba(6,10,20,.74);border:1px solid rgba(255,255,255,.08);}
+.temp-card .label{font-size:clamp(13px,0.92vw,17px);color:rgba(232,234,246,.78);font-weight:600;margin-bottom:5px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.temp-card .value{position:relative;z-index:1;font-size:clamp(17px,1.25vw,23px);line-height:1.05;color:#00e5ff;font-weight:800;text-shadow:0 0 8px rgba(0,229,255,.34);white-space:nowrap;animation:dataPulse 4.2s ease-in-out infinite;}
 .temp-card.primary{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;}
 .temp-card.primary .label{margin-bottom:0;}
-.temp-card.primary .value{font-size:var(--fs-large);flex:0 0 auto;}
-.weather-hero{position:relative;z-index:2;margin-bottom:12px;min-width:0;overflow:hidden;display:flex;align-items:stretch;gap:12px;}
+.temp-card.primary .value{font-size:clamp(24px,2.2vw,36px);flex:0 0 auto;}
+.weather-hero{position:relative;z-index:2;margin-bottom:12px;min-width:0;overflow:hidden;display:flex;align-items:stretch;gap:12px;flex:1;min-height:0;}
 .weather-hero-left{flex:1;display:flex;align-items:center;gap:12px;min-width:0;padding:10px 12px;border-radius:9px;background:rgba(6,10,20,.74);border:1px solid rgba(255,255,255,.08);}
 .weather-hero-right{flex:1;display:flex;flex-direction:column;justify-content:center;min-width:0;padding:10px 12px;border-radius:9px;background:rgba(6,10,20,.74);border:1px solid rgba(255,255,255,.08);}
-.weather-hero-right .label{font-size:var(--fs-label);color:rgba(232,234,246,.66);font-weight:600;margin-bottom:6px;}
-.weather-current{flex:1;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;}
-.weather-current-text{min-width:0;overflow:hidden;flex:1;}
-.weather-current-label{font-size:var(--fs-label);color:rgba(232,234,246,.66);font-weight:600;margin-top:4px;}
-.weather-current-temp{flex:0 0 auto;font-size:var(--fs-large);line-height:1.05;color:#00e5ff;font-weight:800;text-shadow:0 0 8px rgba(0,229,255,.34);white-space:nowrap;animation:dataPulse 4.2s ease-in-out infinite;}
-.weather-icon{position:relative;flex:0 0 46px;width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(6,10,20,.70);border:1px solid rgba(255,255,255,.08);box-shadow:inset 0 0 16px rgba(0,229,255,.10),0 0 18px rgba(0,229,255,.08);overflow:hidden;}
+.weather-hero-right .label{font-size:clamp(13px,0.92vw,17px);color:rgba(232,234,246,.66);font-weight:600;margin-bottom:6px;white-space:nowrap;}
+/* weather-current and weather-current-temp removed - simplified layout */
+.weather-icon{position:relative;flex:0 0 56px;width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(6,10,20,.70);border:1px solid rgba(255,255,255,.08);box-shadow:inset 0 0 16px rgba(0,229,255,.10),0 0 18px rgba(0,229,255,.08);overflow:hidden;}
 .weather-icon::before,.weather-icon::after{content:"";position:absolute;display:block;}
 .weather-text-wrap{min-width:0;overflow:hidden;}
 .weather-icon.sunny::before{width:20px;height:20px;border-radius:50%;background:#ffeb3b;box-shadow:0 0 18px rgba(255,235,59,.85);}
@@ -1997,6 +1997,28 @@ body{
 .tide-extra .extra-box .value{flex:0 0 auto;text-align:left;}
 .tide-card{display:flex;flex-direction:column;}
 .tide-card .module-title{padding-bottom:6px;margin-bottom:6px;}
+/* 新海况数据模块 顶部独立行+三行三列 */
+.ocean-data-grid{position:relative;z-index:2;display:flex;flex-direction:column;flex:1;gap:8px;min-height:0;}
+.ocean-row{display:flex;gap:8px;flex:1;min-height:0;}
+.ocean-row-top{flex:0 0 auto;min-height:64px;}
+.ocean-cell{position:relative;overflow:hidden;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:10px;padding:8px 6px;background:rgba(6,10,20,.72);border:1px solid rgba(0,229,255,.12);min-width:0;}
+.ocean-cell::after{content:"";position:absolute;top:0;right:0;bottom:0;left:0;background:linear-gradient(100deg,transparent,rgba(0,229,255,.12),transparent);transform:translateX(-120%);animation:shimmerX 6.5s ease-in-out infinite;pointer-events:none;}
+.ocean-row:nth-child(1) .ocean-cell:nth-child(2)::after{animation-delay:.7s}
+.ocean-row:nth-child(2) .ocean-cell:nth-child(1)::after{animation-delay:1.4s}
+.ocean-row:nth-child(2) .ocean-cell:nth-child(2)::after{animation-delay:2.1s}
+.ocean-row:nth-child(2) .ocean-cell:nth-child(3)::after{animation-delay:2.8s}
+.ocean-row:nth-child(3) .ocean-cell:nth-child(1)::after{animation-delay:3.5s}
+.ocean-row:nth-child(3) .ocean-cell:nth-child(2)::after{animation-delay:4.2s}
+.ocean-row:nth-child(3) .ocean-cell:nth-child(3)::after{animation-delay:4.9s}
+.ocean-row:nth-child(4) .ocean-cell:nth-child(1)::after{animation-delay:5.6s}
+.ocean-row:nth-child(4) .ocean-cell:nth-child(2)::after{animation-delay:6.3s}
+.ocean-row:nth-child(4) .ocean-cell:nth-child(3)::after{animation-delay:7s}
+.ocean-cell .label{font-size:var(--fs-label-big);color:rgba(232,234,246,.82);font-weight:700;margin-bottom:6px;line-height:1.3;letter-spacing:.04em;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.ocean-cell strong{font-size:var(--fs-value-big);color:#00e5ff;font-weight:800;text-shadow:0 0 10px rgba(0,229,255,.32);white-space:nowrap;text-align:center;display:inline-flex;align-items:baseline;gap:2px;}
+.ocean-cell strong small{font-size:calc(var(--fs-value-big) * 0.55);color:rgba(232,234,246,.66);margin-left:2px;font-weight:600;white-space:nowrap;}
+.ocean-cell .status-badge{font-size:var(--fs-value-big);padding:6px 18px;margin-top:0;}
+/* ocean-extra-bar removed - items moved into first row */
+.tide-card .beach-list{margin-top:6px;flex:0 0 auto;max-height:160px;}
 .extra-box{position:relative;overflow:hidden;min-width:0;border-radius:9px;padding:4px 8px;background:rgba(6,10,20,.72);border:1px solid rgba(255,255,255,.08);}
 .extra-box .label{font-size:var(--fs-label);color:rgba(232,234,246,.78);font-weight:600;margin-bottom:0;line-height:1.35;}
 .extra-box .value{position:relative;z-index:1;font-size:var(--fs-value);color:#00e5ff;font-weight:800;text-shadow:0 0 8px rgba(0,229,255,.32);white-space:nowrap;animation:dataPulse 5.2s ease-in-out infinite;}
@@ -2013,35 +2035,8 @@ body{
 .chart-card{display:flex;flex-direction:column;}
 #tideChart{position:relative;z-index:2;flex:1;min-height:0;width:100%;border-radius:8px;background:radial-gradient(circle at 50% 50%,rgba(0,229,255,.08),transparent 42%),rgba(6,10,20,.58);border:1px solid rgba(0,229,255,.14);overflow:hidden;}
 #tideChart::before{content:"";position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(0,229,255,.10),transparent);animation:chartAura 6s ease-in-out infinite;z-index:1;}
-.sea-card{display:flex;flex-direction:column;}
-.sea-card::before{background:repeating-radial-gradient(ellipse at 50% 110%,rgba(0,229,255,.07) 0 2px,transparent 3px 12px);animation:tideRipple 8s linear infinite;}
-.sea-metric-grid{position:relative;z-index:2;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;flex:0 0 auto;}
-.sea-metric-grid .metric{margin:0;min-height:46px;padding:6px 10px;}
-.sea-metric-grid .metric .label{font-size:var(--fs-label);margin-bottom:3px;}
-.sea-metric-grid .metric strong{font-size:var(--fs-value);}
-.sea-metric-grid .metric strong.safe{color:#00e676;}
-.sea-metric-grid .metric strong.bad{color:#ff5252;}
-.sea-metric-grid .metric strong.warn{color:#ffca28;}
-.beach-list{position:relative;z-index:2;margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,229,255,.1);flex:1;min-height:0;display:flex;flex-direction:column;}
-.beach-list-title{font-size:clamp(10px,0.72vw,13px);color:rgba(232,234,246,.55);font-weight:600;margin-bottom:6px;flex-shrink:0;letter-spacing:.05em;}
-.beach-list-body{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;overflow-y:auto;padding-right:2px;flex:1;min-height:0;}
-.beach-item{display:flex;flex-direction:column;gap:3px;padding:7px 10px;border-radius:6px;background:rgba(6,10,20,.55);border:1px solid rgba(0,229,255,.08);font-size:clamp(10px,0.68vw,12px);}
-.beach-item-top{display:flex;align-items:center;justify-content:space-between;gap:6px;}
-.beach-item .beach-name{color:rgba(232,234,246,.9);font-weight:600;font-size:clamp(11px,0.75vw,13px);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
-.beach-item .beach-status{flex-shrink:0;font-weight:700;font-size:clamp(10px,0.65vw,11px);}
-.beach-item .beach-status.ok{color:#00e676;}
-.beach-item .beach-status.warn{color:#ffca28;}
-.beach-item .beach-status.bad{color:#ff5252;}
-.beach-item-detail{display:flex;gap:10px;color:rgba(232,234,246,.55);font-size:clamp(9px,0.6vw,11px);}
-.beach-item-detail span{white-space:nowrap;}
-.beach-list-body::-webkit-scrollbar{width:3px;}
-.beach-list-body::-webkit-scrollbar-thumb{background:rgba(0,229,255,.2);border-radius:2px;}
-.right-bottom-stack{display:flex;flex-direction:column;gap:16px;flex:2;min-height:0;}
-.right-bottom-stack>.card{margin-right:0;}
-.right-bottom-stack>.chart-card{flex:1;min-height:0;}
-.bottom-left-stack{display:flex;flex-direction:column;gap:0;flex:1;min-height:0;border:none;background:none;box-shadow:none;animation:none;padding:0;overflow:visible;}
-.bottom-left-stack::before,.bottom-left-stack::after{display:none;}
-.bottom-left-stack>.tide-card{flex:1;min-height:0;margin-right:0;}
+.beach-list{display:none;}
+/* bottom-left-stack and right-bottom-stack removed - now using single row with independent columns */
 .alarm-list-card{display:flex;flex-direction:column;flex:1;min-height:0;}
 .alarm-list-container{position:relative;z-index:2;flex:1;min-height:0;overflow-y:auto;padding-right:4px;}
 .alarm-list-empty{text-align:center;color:rgba(232,234,246,.35);padding:30px 0;font-size:var(--fs-label);}
@@ -2095,7 +2090,7 @@ th{background:rgba(0,229,255,.12);color:#00e5ff;font-weight:800;}
 .alarm-modal-link{font-size:var(--fs-label);color:#42a5f5;text-decoration:none;padding:4px 10px;border:1px solid rgba(66,165,245,.3);border-radius:4px;transition:all .2s;position:relative;z-index:10;}
 .alarm-modal-link:hover{background:rgba(66,165,245,.1);}
 .alarm-modal-link.disabled{color:rgba(232,234,246,.3);border-color:rgba(232,234,246,.15);cursor:not-allowed;pointer-events:none;}
-.content>.row-main,.content>.row-bottom{margin-bottom:16px;}.content>.row-bottom{margin-bottom:0;}.row-main>.card,.row-bottom>.card{margin-right:0;}.row-main>.card:last-child,.row-bottom>.card:last-child{margin-right:0;}.row-main>.left-stack-card:nth-child(1){flex:1;}.row-main>.right-stack-card:nth-child(2){flex:2;display:flex;}.row-bottom>.bottom-left-stack:nth-child(1){flex:1;}.row-bottom>.right-bottom-stack{flex:2;}.metric-grid>.metric{width:calc(50% - 5px);margin-right:10px;margin-bottom:10px;}.metric-grid>.metric:nth-child(2n){margin-right:0;}.metric-grid.three>.metric{width:calc(33.33% - 7px);}.metric-grid.three>.metric:nth-child(3n){margin-right:0;}.temp-strip>.temp-card{width:calc(50% - 4px);margin-right:8px;margin-bottom:8px;}.temp-strip>.temp-card:nth-child(2n){margin-right:0;}.mini-tide>.mini-box{flex:1;margin-right:12px;}.mini-tide>.mini-box:last-child{margin-right:0;}.tide-extra>.extra-box{width:calc(33.33% - 6px);margin-right:8px;margin-bottom:8px;}.tide-extra>.extra-box:nth-child(3n){margin-right:0;}.map-card{padding:12px;}@media (max-width:1079px){
+.content>.row-main{margin-bottom:0;}.row-main>.card{margin-right:0;}.row-main>.card:last-child{margin-right:0;}.row-main>.left-stack-card:nth-child(1){flex:1;}.row-main>.right-stack-card:nth-child(2){flex:2;display:flex;}.metric-grid>.metric{width:calc(50% - 5px);margin-right:10px;margin-bottom:10px;}.metric-grid>.metric:nth-child(2n){margin-right:0;}.metric-grid.three>.metric{width:calc(33.33% - 7px);}.metric-grid.three>.metric:nth-child(3n){margin-right:0;}.temp-strip>.temp-card{width:calc(50% - 4px);margin-right:8px;margin-bottom:8px;}.temp-strip>.temp-card:nth-child(2n){margin-right:0;}.mini-tide>.mini-box{flex:1;margin-right:12px;}.mini-tide>.mini-box:last-child{margin-right:0;}.tide-extra>.extra-box{width:calc(33.33% - 6px);margin-right:8px;margin-bottom:8px;}.tide-extra>.extra-box:nth-child(3n){margin-right:0;}.map-card{padding:12px;}@media (max-width:1079px){
   html,body{overflow:auto}
   .app{height:auto;min-height:100vh;overflow:visible}
 }
@@ -2114,52 +2109,50 @@ html.mobile .top-clock{order:3;width:100%;text-align:center}
 html.mobile .top-date{font-size:12px;white-space:normal;line-height:1.5;text-align:center;max-width:100%;display:block;}
 html.mobile .top-time{font-size:24px;letter-spacing:.10em;line-height:1.05;margin-top:1px;text-align:center;}
 html.mobile .content{padding:10px 10px 16px;height:auto;display:block;overflow:visible;position:static}
-html.mobile .row-main,html.mobile .row-bottom{display:block}
+html.mobile .row-main{display:block}
 html.mobile .left-stack-card{display:block;gap:0;}
 html.mobile .left-stack-card>.card{margin:10px 0;}
+html.mobile .right-stack-card{display:block;gap:0;}
+html.mobile .right-stack-card>.card{margin:10px 0;}
 html.mobile .card{margin:10px 0;min-height:180px;padding:12px;}
 html.mobile .map-card{min-height:420px}
 html.mobile .chart-card{min-height:280px}
+html.mobile .tide-card{min-height:240px}
 html.mobile .alarm-bar{display:none}
 html.mobile .sd-alarm-bar{display:none}
 html.mobile .cma-alarm-bar{display:none}
 html.mobile .map-shell{height:60vh;min-height:360px}
 html.mobile .mobile-map-open{display:block}
 html.mobile .map-actions{left:12px;right:12px;justify-content:center}
-html.mobile .tide-status-row{display:block}
-html.mobile .tide-status-left{margin-bottom:10px}
-html.mobile .tide-extra{display:block}
-html.mobile .extra-row{display:flex;gap:6px;margin-bottom:6px;}
-html.mobile .extra-row .extra-box{flex:1;width:50%;}
-html.mobile .tide-extra .extra-box{width:auto;flex:1;}
+html.mobile .ocean-data-grid{gap:6px;}
+html.mobile .ocean-row{display:flex;gap:6px;margin-bottom:6px;}
+html.mobile .ocean-row-top{min-height:48px;margin-bottom:6px;}
+html.mobile .ocean-cell{padding:6px 4px;}
+html.mobile .ocean-cell .label{font-size:11px;margin-bottom:4px;}
+html.mobile .ocean-cell strong{font-size:14px;}
+html.mobile .ocean-cell strong small{font-size:10px;}
+html.mobile .ocean-cell .status-badge{font-size:14px;padding:4px 10px;}
+/* ocean-extra-bar mobile styles removed */
+html.mobile .tide-card .beach-list{max-height:120px;}
 html.mobile .module-title{font-size:13px;padding-bottom:8px;margin-bottom:10px;}
 html.mobile .module-title small{font-size:11px;}
 html.mobile .metric .label{font-size:12px;}
 html.mobile .metric strong{font-size:15px;}
-html.mobile .temp-card .label{font-size:12px;}
-html.mobile .temp-card .value{font-size:14px;}
-html.mobile .temp-card.primary .value{font-size:22px;}
-html.mobile .weather-current-temp{font-size:22px;}
-html.mobile .weather-hero-right .label{font-size:12px;}
+html.mobile .temp-card .label{font-size:13px;}
+html.mobile .temp-card .value{font-size:16px;}
+html.mobile .temp-card.primary .value{font-size:24px;}
+/* weather-current mobile styles removed */
+html.mobile .weather-hero-right .label{font-size:13px;}
+html.mobile .wind-text{font-size:16px;}
+html.mobile .wind-compass{width:36px;height:36px;flex-basis:36px;}
+html.mobile .wind-needle{height:23px;margin-top:-11.5px;}
+html.mobile .weather-icon{width:42px;height:42px;flex-basis:42px;}
 html.mobile .status-badge{font-size:14px;padding:5px 12px;}
-html.mobile .status-inline-row .status-badge{font-size:16px;padding:6px 14px;}
-html.mobile .level-number{font-size:24px;}
-html.mobile .level-number small{font-size:14px;}
-html.mobile .level-inline .level-number{font-size:28px;}
-html.mobile .level-inline .level-number small{font-size:14px;}
-html.mobile .tide-extreme-box .label{font-size:11px;}
-html.mobile .tide-extreme-box .value{font-size:13px;}
 html.mobile .mini-box .label{font-size:11px;}
 html.mobile .mini-box .value{font-size:13px;}
 html.mobile .extra-box .label{font-size:11px;}
 html.mobile .extra-box .value{font-size:12px;}
 html.mobile th,html.mobile td{font-size:11px;padding:5px 3px;}
-html.mobile .beach-list-title{font-size:12px;}
-html.mobile .beach-item{font-size:12px;padding:8px 10px;gap:4px;}
-html.mobile .beach-item .beach-name{font-size:13px;}
-html.mobile .beach-item .beach-status{font-size:11px;}
-html.mobile .beach-item-detail{font-size:11px;gap:12px;}
-html.mobile .beach-list-body{gap:6px;grid-template-columns:repeat(2,1fr);}
 
 /* 2026 UI refinement: calmer hierarchy, clearer focus and robust sizing. */
 :root{
@@ -2175,7 +2168,7 @@ body{background:radial-gradient(circle at 14% -8%,rgba(32,155,196,.22),transpare
 .sound-btn:hover,.refresh-btn:hover,.day-btn:hover{background:rgba(66,215,245,.1);color:var(--text)}
 .sound-btn:focus-visible,.refresh-btn:focus-visible,.day-btn:focus-visible,.btn:focus-visible,.alarm-modal-close:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .refresh-btn{background:rgba(66,215,245,.1);color:var(--accent)}.day-btn.active{background:var(--accent);color:#04202a;border-color:transparent;font-weight:800}
-.content{height:calc(100vh - 94px);padding:14px;gap:14px}.content>.row-main,.content>.row-bottom{margin-bottom:0}.row-main,.row-bottom,.left-stack-card,.right-bottom-stack{gap:14px}
+.content{height:calc(100vh - 94px);padding:14px;gap:14px}.content>.row-main{margin-bottom:0}.row-main,.left-stack-card,.right-stack-card{gap:14px}
 .card{padding:14px;border-radius:14px;background:linear-gradient(145deg,var(--surface),rgba(8,15,30,.82));border-color:var(--line);box-shadow:0 12px 32px rgba(0,0,0,.28);animation:none}
 .card::after{display:none}.card::before{opacity:.45}.right-stack-card>.card,.left-stack-card>.card{border-radius:14px}
 .module-title{font-size:12px;color:var(--text);letter-spacing:.08em;padding-bottom:9px;margin-bottom:10px}.module-title span:first-child{color:var(--text)}.module-title::before{background:var(--accent);animation:none}.module-title small,.module-title small.update-time{color:var(--muted)}
@@ -2185,8 +2178,8 @@ body{background:radial-gradient(circle at 14% -8%,rgba(32,155,196,.22),transpare
 .map-shell,#tideChart{border-radius:10px}.alarm-list-item{transition:background .18s,border-color .18s,transform .18s}
 button:disabled{cursor:wait;opacity:.65}.refresh-btn.is-loading{color:var(--text)}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
-@media (max-width:1079px){html:not(.mobile) .content{height:calc(100vh - 94px);overflow:auto}.row-main,.row-bottom{min-height:520px}}
-@media (max-height:740px) and (min-width:1080px){.topbar{height:56px;flex-basis:56px}.content{height:calc(100vh - 86px);padding:10px;gap:10px}.row-main,.row-bottom,.left-stack-card,.right-bottom-stack{gap:10px}.card{padding:10px}.module-title{margin-bottom:8px;padding-bottom:7px}}
+@media (max-width:1079px){html:not(.mobile) .content{height:calc(100vh - 94px);overflow:auto}.row-main{min-height:520px}}
+@media (max-height:740px) and (min-width:1080px){.topbar{height:56px;flex-basis:56px}.content{height:calc(100vh - 86px);padding:10px;gap:10px}.row-main,.left-stack-card,.right-stack-card{gap:10px}.card{padding:10px}.module-title{margin-bottom:8px;padding-bottom:7px}}
 </style>
 </head>
 <body>
@@ -2225,13 +2218,7 @@ button:disabled{cursor:wait;opacity:.65}.refresh-btn.is-loading{color:var(--text
         <div class="weather-hero">
           <div class="weather-hero-left">
             <div id="weatherIcon" class="weather-icon cloudy"></div>
-            <div class="weather-current">
-              <div class="weather-current-text">
-                <div id="weatherText" style="font-size:clamp(16px,1.3vw,24px);color:#e8eaf6;font-weight:800;line-height:1.3;">--</div>
-                <div id="airTempLabel" class="weather-current-label">当前气温</div>
-              </div>
-              <div id="airTemp" class="weather-current-temp">--</div>
-            </div>
+            <div id="weatherText" style="font-size:clamp(20px,1.7vw,30px);color:#e8eaf6;font-weight:800;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;">--</div>
           </div>
           <div class="weather-hero-right">
             <div class="label">风向风级</div>
@@ -2244,19 +2231,29 @@ button:disabled{cursor:wait;opacity:.65}.refresh-btn.is-loading{color:var(--text
         </div>
       </div>
 
-      <div class="card sea-card" id="seaCard">
+      <div class="card tide-card" id="tideCard">
         <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-        <div class="module-title"><span>海况数据</span><small id="waveTime">--</small></div>
-        <div class="sea-metric-grid">
-          <div class="metric"><div class="label">近海浪高</div><strong id="offshoreWaveHeight">--</strong></div>
-          <div class="metric"><div class="label">浪况等级</div><strong id="waveLevel">--</strong></div>
-          <div class="metric"><div class="label">浴场水温</div><strong id="waterTemp">--</strong></div>
-          <div class="metric"><div class="label">下海提示</div><strong id="swimTip">--</strong></div>
-          <div class="metric"><div class="label">紫外线指数</div><strong id="uvIndex">--</strong></div>
-        </div>
-        <div class="beach-list" id="beachList" style="display:none;">
-          <div class="beach-list-title">主要浴场概览</div>
-          <div class="beach-list-body"></div>
+        <div class="module-title"><span>海况数据</span><small id="tideUpdate">--</small></div>
+        <div class="ocean-data-grid">
+          <div class="ocean-row ocean-row-top">
+            <div class="ocean-cell"><div class="label">近海浪高</div><strong id="offshoreWaveHeight" class="data-value">--</strong></div>
+            <div class="ocean-cell"><div class="label">浴场水温</div><strong id="beachWaterTemp" class="data-value">--</strong></div>
+          </div>
+          <div class="ocean-row">
+            <div class="ocean-cell"><strong id="tideBadge" class="status-badge">等待加载</strong></div>
+            <div class="ocean-cell"><div class="label">当前潮高</div><strong id="currentLevel" class="data-value">--<small>cm</small></strong></div>
+            <div class="ocean-cell"><div class="label">潮段进度</div><strong id="tideProgress" class="data-value">--</strong></div>
+          </div>
+          <div class="ocean-row">
+            <div class="ocean-cell"><div class="label">下次高潮时间</div><strong id="nextHigh" class="data-value">--</strong></div>
+            <div class="ocean-cell"><div class="label">下次高潮潮高</div><strong id="nextHighLevel" class="data-value">--<small>cm</small></strong></div>
+            <div class="ocean-cell"><div class="label">距下次高潮</div><strong id="highDelta" class="data-value">--</strong></div>
+          </div>
+          <div class="ocean-row">
+            <div class="ocean-cell"><div class="label">下次低潮时间</div><strong id="nextLow" class="data-value">--</strong></div>
+            <div class="ocean-cell"><div class="label">下次低潮潮高</div><strong id="nextLowLevel" class="data-value">--<small>cm</small></strong></div>
+            <div class="ocean-cell"><div class="label">距下次低潮</div><strong id="lowDelta" class="data-value">--</strong></div>
+          </div>
         </div>
       </div>
       </div>
@@ -2280,54 +2277,12 @@ button:disabled{cursor:wait;opacity:.65}.refresh-btn.is-loading{color:var(--text
           </div>
         </div>
       </div>
-      </div>
-    </section>
 
-    <section class="row-bottom">
-      <div class="bottom-left-stack">
-      <div class="card tide-card" id="tideCard">
+      <div class="card chart-card" id="chartCard">
         <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-        <div class="module-title"><span>潮汐状态</span><small id="tideUpdate">--</small></div>
-        <div class="tide-status-row">
-          <div class="tide-status-left">
-            <div class="status-big" id="tideCardContent">
-              <div class="status-inline-row">
-                <span id="tideBadge" class="status-badge">等待加载</span>
-                <div class="level-inline">
-                  <span class="level-inline-label">当前潮高</span>
-                  <span id="currentLevel" class="level-number data-value">--</span><small>cm</small>
-                </div>
-              </div>
-            </div>
-            <div class="tide-extreme-row">
-              <div class="tide-extreme-box"><div class="label">当日最高潮位</div><div id="todayHighLevel" class="value">--</div></div>
-              <div class="tide-extreme-box"><div class="label">当日最低潮位</div><div id="todayLowLevel" class="value">--</div></div>
-            </div>
-          </div>
-          <div class="tide-extra">
-            <div class="extra-row">
-              <div class="extra-box"><div class="label">潮段进度</div><div id="tideProgress" class="value">--</div></div>
-              <div class="extra-box"><div class="label">今日潮差</div><div id="tideRange" class="value">--</div></div>
-            </div>
-            <div class="extra-row">
-              <div class="extra-box"><div class="label">下次高潮</div><div id="nextHigh" class="value">--</div></div>
-              <div class="extra-box"><div class="label">下次低潮</div><div id="nextLow" class="value">--</div></div>
-            </div>
-            <div class="extra-row">
-              <div class="extra-box"><div class="label">距高潮</div><div id="highDelta" class="value">--</div></div>
-              <div class="extra-box"><div class="label">距低潮</div><div id="lowDelta" class="value">--</div></div>
-            </div>
-          </div>
-        </div>
+        <div class="module-title"><span id="chartTitle">青岛今日潮汐曲线</span><small id="chartSource">全球潮汐平台</small><small id="chartTime" class="update-time">--</small></div>
+        <div id="tideChart">等待曲线数据</div>
       </div>
-      </div>
-
-      <div class="right-bottom-stack">
-        <div class="card chart-card" id="chartCard">
-          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-          <div class="module-title"><span id="chartTitle">青岛今日潮汐曲线</span><small id="chartSource">全球潮汐平台</small><small id="chartTime" class="update-time">--</small></div>
-          <div id="tideChart">等待曲线数据</div>
-        </div>
       </div>
     </section>
   </main>
@@ -2357,6 +2312,7 @@ if (!String.prototype.padStart) { String.prototype.padStart = function(len, ch) 
 var tideRawData=null, tideChart=null, lastChartRaw=null, lastChartSite=null, lastChartPoints=[], lastTideList=[], resizeTimer=null, lastTideRising=null, soundEnabled=false, audioCtx=null, selectedDayOffset=0, tomorrowTideList=[], tomorrowTideReady=false;
 var $=function(id){return document.getElementById(id);};
 function setText(id,text){var el=$(id); if(el) el.textContent=(text===null||text===undefined||text==="")?"--":text;}
+function setTextWithUnit(id,val,unit){var el=$(id); if(el){var v=(val===null||val===undefined||val==="")?"--":val; el.innerHTML=v+(unit?'<small>'+unit+'</small>':'');}}
 function lunarText(d){
   try{
     if(typeof Intl==="undefined"||!Intl.DateTimeFormat)return "农历 --";
@@ -2432,7 +2388,6 @@ function updateDayButtons(){
   if(today){if(selectedDayOffset===0){today.classList.add("active");}else{today.classList.remove("active");}today.setAttribute("aria-pressed",selectedDayOffset===0?"true":"false");}
   if(tomorrow){if(selectedDayOffset===1){tomorrow.classList.add("active");}else{tomorrow.classList.remove("active");}tomorrow.setAttribute("aria-pressed",selectedDayOffset===1?"true":"false");}
   setText("chartTitle","青岛"+selectedDayLabel()+"潮汐曲线");
-  setText("airTempLabel",selectedDayOffset===0?"当前气温":"明日最高");
   setText("tempRangeLabel",selectedDayLabel()+"温度");
 }
 function switchForecastDay(offset){
@@ -2536,7 +2491,6 @@ function weatherIconClass(weatherText){
 function renderWeather(obj,updateTime){
   setText("weatherTime","更新 "+(updateTime||"--")); setText("weatherText",obj&&obj.weather);
   var icon=$("weatherIcon"); if(icon) icon.className="weather-icon "+weatherIconClass(obj&&obj.weather);
-  setText("airTemp",obj&&obj.temperature);
   setText("tempRange",obj&&obj.temperature_range);
   setText("humidity",obj&&obj.humidity);
   var windText=(obj&&obj.wind_direction?obj.wind_direction:"--")+" "+(obj?windLevelText(obj.wind_speed):"--");
@@ -2583,46 +2537,8 @@ function uvLevelText(uv){
   return "很强";
 }
 function renderWave(obj,updateTime){
-  var offshore=$("offshoreWaveHeight"), offshoreText=offshore?offshore.textContent:"";
-  var levelWave=offshoreText&&offshoreText!=="--"?offshoreText:(obj&&obj.wave_height);
-  setText("waveTime","更新 "+(updateTime||"--")); setText("waterTemp",obj&&obj.water_temp);
-  setText("waveLevel",obj?waveLevelText(levelWave):"--");
-  setText("swimTip",obj&&obj.swim_tip); var el=$("swimTip"); if(el) el.className=obj&&obj.swim_tip==="适宜"?"safe":(obj&&obj.swim_tip?"bad":"");
-  // 紫外线指数
-  var uvEl=$("uvIndex");
-  if(uvEl){
-    var uv=estimateUVIndex();
-    var uvText=uv.toFixed(1)+" · "+uvLevelText(uv);
-    uvEl.textContent=uvText;
-    uvEl.className=uv>=6?"warn":(uv>=3?"":"safe");
-  }
-  // 浴场列表（增强版：显示浪高、水温）
-  var beachList=$("beachList");
-  var beachBody=beachList?beachList.querySelector(".beach-list-body"):null;
-  if(beachBody&&obj&&obj.beaches&&obj.beaches.length>0){
-    beachList.style.display="flex";
-    var html="";
-    for(var i=0;i<Math.min(obj.beaches.length,9);i++){
-      var b=obj.beaches[i];
-      var statusCls="warn";
-      var statusText=b.swim_tip||"--";
-      if(b.swim_tip==="适宜")statusCls="ok";
-      else if(b.swim_tip==="不适宜")statusCls="bad";
-      html+='<div class="beach-item">';
-      html+='<div class="beach-item-top">';
-      html+='<span class="beach-name">'+b.name+'</span>';
-      html+='<span class="beach-status '+statusCls+'">'+statusText+'</span>';
-      html+='</div>';
-      html+='<div class="beach-item-detail">';
-      html+='<span>🌊 '+(b.wave_height||'--')+'</span>';
-      html+='<span>🌡 '+(b.water_temp||'--')+'</span>';
-      html+='</div>';
-      html+='</div>';
-    }
-    beachBody.innerHTML=html;
-  }else if(beachList){
-    beachList.style.display="none";
-  }
+  if(obj&&obj.water_temp){setText("beachWaterTemp",obj.water_temp);}
+  if(!obj||!obj.water_temp){setText("beachWaterTemp","--");}
 }
 function tideCurrentStatus(){
   var now=new Date();
@@ -2676,7 +2592,7 @@ function calcTideStatus(list){
     setText("tideUpdate","状态 "+statusTime);
   }
   var pts=list.map(function(x){return {min:timeToMin(x.t),height:Number(x.l),type:x.type,time:formatHHMM(x.t)};}).filter(function(p){return p.min!==null&&!isNaN(p.height);}).sort(function(a,b){return a.min-b.min;});
-  if(pts.length<2){setText("tideBadge","数据不足");setText("tideStatusText","潮位数据不足");return;}
+  if(pts.length<2){setText("tideBadge","数据不足");return;}
   var curve=(lastChartPoints||[]).filter(function(p){return p.minute!==null&&!isNaN(p.value);}).sort(function(a,b){return a.minute-b.minute;});
 
   // 如果是今日模式且有明日数据，将明日第一个高低潮加入计算（用于末段进度）
@@ -2724,9 +2640,6 @@ function calcTideStatus(list){
   if(selectedDayOffset===0&&lastTideRising!==null&&rising&&!lastTideRising&&soundEnabled){playRisingSound();}
   lastTideRising=rising;
   if(next){
-    var nextPrefix=next.isTomorrow?"明日 ":"";
-    setText("tideStatusText",nextPrefix+"下一次"+next.type+" "+next.time+"，潮位 "+next.height+" cm");
-    setText("nextTideDelta",formatDuration(next.min-nowMin));
     if(prev&&prev.min<nowMin&&prev.min<next.min){
       var phaseTotal=Math.max(1,next.min-prev.min);
       var phaseProgress=Math.max(0,Math.min(100,Math.round((nowMin-prev.min)/phaseTotal*100)));
@@ -2735,12 +2648,10 @@ function calcTideStatus(list){
       setText("tideProgress","0%");
     }
   }else{
-    setText("tideStatusText",selectedDayLabel()+"后续无高低潮预报");
-    setText("nextTideDelta",selectedDayLabel()+"无");
     setText("tideProgress","--");
   }
   var currentLevel=interpolateCurrentLevel(curve,nowMin);
-  setText("currentLevel",currentLevel!==null?currentLevel:"--");
+  setTextWithUnit("currentLevel",currentLevel!==null?currentLevel:"--","cm");
   var highs=pts.filter(function(p){return p.type==="高潮";}), lows=pts.filter(function(p){return p.type==="低潮";});
   var nextHigh=null,nextLow=null;
   for(var hi=0;hi<highs.length;hi++){if(highs[hi].min>nowMin){nextHigh=highs[hi];break;}}
@@ -2760,8 +2671,12 @@ function calcTideStatus(list){
 
   var nextHighText=nextHigh?((nextHigh.isTomorrow?"明日 ":"")+(nextHigh.time||formatHHMM(nextHigh.t))):"--";
   var nextLowText=nextLow?((nextLow.isTomorrow?"明日 ":"")+(nextLow.time||formatHHMM(nextLow.t))):"--";
+  var nextHighLevelText=nextHigh?(nextHigh.height||nextHigh.l||"--"):"--";
+  var nextLowLevelText=nextLow?(nextLow.height||nextLow.l||"--"):"--";
   setText("nextHigh",nextHighText);
   setText("nextLow",nextLowText);
+  setTextWithUnit("nextHighLevel",nextHighLevelText,"cm");
+  setTextWithUnit("nextLowLevel",nextLowLevelText,"cm");
   var highDeltaText="--";
   var lowDeltaText="--";
   if(nextHigh){
@@ -2820,13 +2735,7 @@ function formatDuration(minutes){
   return h+"小时"+(m>0?m+"分":"");
 }
 function renderTideSummary(pts){
-  if(!pts||!pts.length){setText("tideRange","--");setText("todayHighLevel","--");setText("todayLowLevel","--");return;}
-  var heights=pts.map(function(p){return p.height;}).filter(function(v){return !isNaN(v);});
-  if(!heights.length){setText("tideRange","--");setText("todayHighLevel","--");setText("todayLowLevel","--");return;}
-  var max=Math.max.apply(null,heights), min=Math.min.apply(null,heights);
-  setText("tideRange",Math.round(max-min)+" cm");
-  setText("todayHighLevel",Math.round(max)+" cm");
-  setText("todayLowLevel",Math.round(min)+" cm");
+  // 新布局不再需要tideRange/todayHighLevel/todayLowLevel，保留函数以防调用报错
 }
 function parseChartPoints(rawArr){
   var arr=Array.isArray(rawArr)?rawArr:[]; var all=arr.map(function(it){
@@ -2842,7 +2751,7 @@ function parseChartPoints(rawArr){
   }
   return points;
 }
-function adaptiveChartFont(base,min,max){var scale=Math.min(window.innerWidth/1280,window.innerHeight/760);return Math.max(min,Math.min(max,Math.round(base*scale)));}
+function adaptiveChartFont(base,min,max){var scale=Math.min(window.innerWidth/1280,window.innerHeight/760);return Math.max(min,Math.min(max,Math.round(base*scale*1.4)));}
 function initChart(){
   if(typeof echarts==="undefined")return false; if(!tideChart){tideChart=echarts.init($("tideChart")); window.addEventListener("resize",function(){tideChart.resize();clearTimeout(resizeTimer);resizeTimer=setTimeout(function(){if(lastChartRaw)renderChart(lastChartRaw,"",lastChartSite);},160);});}
   return true;
@@ -2854,10 +2763,10 @@ function renderChart(rawArr,msg,site){
   setText("chartSource",site&&site.code?site.name+"("+site.code+")":"全球潮汐平台");
   if(!points.length){$("tideChart").innerText=msg||"暂无实时曲线数据";return;}
   if(!initChart()){ $("tideChart").innerText="ECharts 加载中"; return; }
-  var axisFont=adaptiveChartFont(10,8,13), markFont=adaptiveChartFont(9,7,11), nameFont=adaptiveChartFont(11,9,14);
+  var axisFont=adaptiveChartFont(14,11,18), markFont=adaptiveChartFont(13,10,16), nameFont=adaptiveChartFont(15,12,19);
   var maxVal=Math.max.apply(null,points.map(function(p){return p.value;}));
   var isMobileView=document.documentElement.classList.contains("mobile");
-  var gridLeft=isMobileView?26:44, gridRight=isMobileView?26:44, gridTop=isMobileView?32:42, gridBottom=isMobileView?28:34;
+  var gridLeft=isMobileView?30:52, gridRight=isMobileView?30:52, gridTop=isMobileView?36:48, gridBottom=isMobileView?32:40;
   var markData=points.filter(function(p){return p.pointType==="extrema";}).map(function(p){return {name:p.extremaType,coord:[p.label,p.value],value:p.value,labelText:p.extremaType+" "+p.label+"\n"+p.value+"cm",itemStyle:{color:p.extremaType==="高潮"?"#ffab00":"#00e676"},label:{formatter:function(params){return params.data.labelText;},color:p.extremaType==="高潮"?"#ffab00":"#00e676",fontSize:markFont,fontWeight:"bold",lineHeight:markFont+1,position:"right",distance:4,offset:[0,-14]}};});
   tideChart.setOption({
     backgroundColor:"transparent",
@@ -2865,7 +2774,7 @@ function renderChart(rawArr,msg,site){
     grid:{left:gridLeft,right:gridRight,top:gridTop,bottom:gridBottom,containLabel:true},
     xAxis:{type:"category",data:points.map(function(p){return p.label;}),axisLabel:{rotate:0,interval:2,fontSize:axisFont,margin:6,color:"rgba(232,234,246,.65)"},axisLine:{lineStyle:{color:"rgba(0,229,255,.28)"}},axisTick:{lineStyle:{color:"rgba(0,229,255,.22)"}}},
     yAxis:{name:"潮高(cm)",type:"value",max:Math.ceil((maxVal+35)/50)*50,nameTextStyle:{fontSize:nameFont,color:"rgba(232,234,246,.65)"},axisLabel:{fontSize:axisFont,color:"rgba(232,234,246,.65)"},axisLine:{lineStyle:{color:"rgba(0,229,255,.28)"}},splitLine:{lineStyle:{color:"rgba(255,255,255,.07)"}}},
-    series:[{name:"潮高",type:"line",data:points.map(function(p){return p.value;}),smooth:true,symbolSize:4,itemStyle:{color:"#00e5ff"},lineStyle:{color:"#00e5ff",width:2.4,shadowBlur:8,shadowColor:"rgba(0,229,255,.45)"},areaStyle:{color:{type:"linear",colorStops:[{offset:0,color:"rgba(0,229,255,.26)"},{offset:1,color:"rgba(0,229,255,.03)"}]}},markPoint:{symbol:"circle",symbolSize:18,data:markData},markLine:{symbol:"none",silent:true,data:[],lineStyle:{color:"#ff5252",width:1.5,type:"solid",shadowBlur:6,shadowColor:"rgba(255,82,82,.5)"},label:{show:true,formatter:"现在",color:"#ff5252",fontSize:markFont,fontWeight:"bold",position:"end",distance:[4,0],backgroundColor:"rgba(6,10,20,.8)",padding:[2,6,2,6],borderRadius:3}}}]
+    series:[{name:"潮高",type:"line",data:points.map(function(p){return p.value;}),smooth:true,symbolSize:6,itemStyle:{color:"#00e5ff"},lineStyle:{color:"#00e5ff",width:3,shadowBlur:10,shadowColor:"rgba(0,229,255,.45)"},areaStyle:{color:{type:"linear",colorStops:[{offset:0,color:"rgba(0,229,255,.26)"},{offset:1,color:"rgba(0,229,255,.03)"}]}},markPoint:{symbol:"circle",symbolSize:24,data:markData},markLine:{symbol:"none",silent:true,data:[],lineStyle:{color:"#ff5252",width:2,type:"solid",shadowBlur:8,shadowColor:"rgba(255,82,82,.5)"},label:{show:true,formatter:"现在",color:"#ff5252",fontSize:markFont,fontWeight:"bold",position:"end",distance:[4,0],backgroundColor:"rgba(6,10,20,.8)",padding:[2,6,2,6],borderRadius:3}}}]
   },true);
   // 启动当前时间标线更新（明日模式下不显示）
   if(selectedDayOffset===0){
@@ -2928,18 +2837,20 @@ function clearModuleUnavailable(cardId){var card=$(cardId);if(card){var h=card.q
 function setAllText(ids, text){for(var i=0;i<ids.length;i++){setText(ids[i],text);}}
 function showWeatherUnavailable(){
   clearModuleUnavailable("weatherCard");
-  setAllText(["airTemp","tempRange","humidity","windDirection"],"未知");
+  setAllText(["tempRange","humidity","windDirection"],"未知");
   setText("weatherTime","暂无明日数据"); setText("weatherText","未知");
   var icon=$("weatherIcon"); if(icon) icon.className="weather-icon";
 }
 function showWaveUnavailable(){
-  clearModuleUnavailable("seaCard");
-  setAllText(["offshoreWaveHeight","waterTemp","waveLevel","swimTip","seaRisk"],"未知");
-  setText("waveTime","暂无明日数据");
+  setText("offshoreWaveHeight","--");
+  setText("beachWaterTemp","--");
 }
 function showTideUnavailable(){
   clearModuleUnavailable("tideCard");
-  setAllText(["tideBadge","tideStatusText","nextHigh","nextLow","currentLevel","tideProgress","highDelta","lowDelta","tideRange","todayHighLevel","todayLowLevel"],"未知");
+  setAllText(["tideBadge","nextHigh","nextLow","tideProgress","highDelta","lowDelta"],"未知");
+  setTextWithUnit("currentLevel","--","cm");
+  setTextWithUnit("nextHighLevel","--","cm");
+  setTextWithUnit("nextLowLevel","--","cm");
   setText("tideUpdate","暂无明日数据"); setText("globalUpdate","数据更新 --");
 }
 function showChartUnavailable(){
@@ -2949,7 +2860,7 @@ function showChartUnavailable(){
 }
 function loadWeather(){fetchJSON(apiUrl("/api/weather"),20000,function(e,r){if(r&&r.tomorrow_unavailable){showWeatherUnavailable();return;}if(r&&r.data)renderWeather(r.data,r.updateTime);});}
 function loadWave(){fetchJSON(apiUrl("/api/wave"),20000,function(e,r){if(r&&r.tomorrow_unavailable){showWaveUnavailable();return;}if(r&&r.data)renderWave(r.data,r.updateTime);});}
-function loadOffshoreWave(){fetchJSON(apiUrl("/api/offshore_wave"),20000,function(e,r){if(r&&r.tomorrow_unavailable){setText("offshoreWaveHeight","未知");return;}if(r&&r.data){setText("offshoreWaveHeight",r.data.wave_height);setText("waveLevel",waveLevelText(r.data.wave_height));var swimTip=$("swimTip");setText("seaRisk",seaRiskText(r.data.wave_height,swimTip?swimTip.textContent:""));}});}
+function loadOffshoreWave(){fetchJSON(apiUrl("/api/offshore_wave"),20000,function(e,r){if(e||!r||!r.data)return;var wh=r.data.wave_height||"--";setText("offshoreWaveHeight",wh);});}
 function loadAlarm(){fetchJSON(apiUrl("/api/alarm"),20000,function(e,r){});}
 function loadSdAlarm(){fetchJSON("/api/sd_alarm",45000,function(e,r){
   var listCard=$("alarmListCard");var container=$("alarmListContainer");var timeEl=$("alarmListTime");
@@ -3294,15 +3205,6 @@ function boot(){
   loadTide(); loadChart(); loadWeather(); loadWave(); loadOffshoreWave(); loadCmaAlarm(); loadSdAlarm();
   setInterval(loadTide,60*60*1000); setInterval(loadChart,6*60*60*1000); setInterval(loadWeather,10*60*1000); setInterval(loadWave,60*60*1000); setInterval(loadOffshoreWave,60*60*1000); setInterval(loadCmaAlarm,5*60*1000); setInterval(loadSdAlarm,5*60*1000);
   setInterval(function(){if(lastTideList.length)calcTideStatus(lastTideList);},60*1000);
-  // 每分钟更新海况卡片中的紫外线指数
-  setInterval(function(){
-    var uvEl=$("uvIndex");
-    if(uvEl){
-      var uv=estimateUVIndex();
-      uvEl.textContent=uv.toFixed(1)+" · "+uvLevelText(uv);
-      uvEl.className=uv>=6?"warn":(uv>=3?"":"safe");
-    }
-  },60*1000);
   setTimeout(function(){if(lastChartRaw)renderChart(lastChartRaw,"",lastChartSite);},1000);
 }
 boot();
