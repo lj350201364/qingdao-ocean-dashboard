@@ -21,11 +21,11 @@ except Exception:
 
 
 PORT = int(os.environ.get("PORT", "5051"))
-BEACH_NAME = "第六海水浴场"
+BEACH_NAME = "栈桥浴场"
 GLOBAL_TIDE_SITE_CODE = "T046"
 GLOBAL_TIDE_SITE_NAME = "青岛"
 
-# 第六海水浴场附近坐标。如需更精确，可按实际点位微调。
+# 栈桥浴场附近坐标。如需更精确，可按实际点位微调。
 WEATHER_LATITUDE = 36.061
 WEATHER_LONGITUDE = 120.326
 
@@ -306,18 +306,18 @@ def classify_extrema(extrema):
         next_h = sorted_items[i + 1]["height"] if i < total - 1 else None
         h = item["height"]
         if prev_h is None and next_h is not None:
-            item["type"] = "低潮" if h < next_h else "高潮"
+            item["type"] = "低潮" if h < next_h else "满潮"
         elif next_h is None and prev_h is not None:
-            item["type"] = "低潮" if h < prev_h else "高潮"
+            item["type"] = "低潮" if h < prev_h else "满潮"
         elif prev_h is not None and next_h is not None:
-            item["type"] = "低潮" if h <= prev_h and h <= next_h else "高潮"
+            item["type"] = "低潮" if h <= prev_h and h <= next_h else "满潮"
         else:
             item["type"] = "潮位"
     return sorted_items
 
 
 def build_qingdao_tide_table(site, report, sub, extrema, target_date):
-    highs = [x for x in extrema if x["type"] == "高潮"]
+    highs = [x for x in extrema if x["type"] == "满潮"]
     lows = [x for x in extrema if x["type"] == "低潮"]
 
     def pick(items, index, key):
@@ -582,7 +582,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
 
             # 主要浴场数据
             beach_fields = [
-                ("第六浴场", "SB24hWFSixthBathing"),
+                ("栈桥浴场", "SB24hWFSixthBathing"),
                 ("第一浴场", "SB24hWFFirstBathing"),
                 ("石老人浴场", "SB24hWFSLRBathing"),
                 ("金沙滩", "SB24hWFGoldBeach"),
@@ -643,7 +643,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             beaches.sort(key=lambda b: b["score"], reverse=True)
             recommended = beaches[0]["name"] if beaches else "--"
 
-            # 主要数据（用第六浴场作为默认）
+            # 主要数据（用栈桥浴场作为默认）
             wave_info = {
                 "wave_height": format_value(row.get("SB24hWFSixthBathingWaveHeight"), "m"),
                 "water_temp": format_value(
@@ -1769,7 +1769,7 @@ HTML = r"""
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>青岛第六海水浴场实时展示大屏</title>
+<title>栈桥浴场实时展示大屏</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@4.9.0/dist/echarts.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;}
@@ -1801,30 +1801,27 @@ body{
   padding:0 24px;background:linear-gradient(180deg,rgba(10,14,26,.97),rgba(10,14,26,.78));
   border-bottom:1px solid rgba(0,229,255,0.16);box-shadow:0 2px 18px rgba(0,0,0,.42);z-index:10;
 }
-.brand{display:flex;align-items:center;gap:12px;min-width:0;overflow:hidden;}
+.brand{display:flex;align-items:center;gap:12px;min-width:0;overflow:hidden;flex:1;}
 .brand-code{font-size:var(--fs-topbar-code);letter-spacing:.16em;color:#00e5ff;text-shadow:0 0 12px rgba(0,229,255,.5);font-weight:700;}
 .brand-title{font-size:var(--fs-topbar-title);color:rgba(232,234,246,0.66);font-weight:600;line-height:1.3;}
-.live{display:flex;align-items:center;gap:8px;color:#00e676;font-size:var(--fs-label);white-space:nowrap;min-width:0;}
-.live-dot{width:8px;height:8px;border-radius:50%;background:#00e676;box-shadow:0 0 10px #00e676;animation:pulse 1.6s infinite;}
-.top-actions{display:flex;align-items:center;gap:8px;white-space:nowrap;}
+.topbar-title{flex:1;text-align:center;font-size:clamp(18px,2vw,28px);font-weight:800;color:#00e5ff;text-shadow:0 0 20px rgba(0,229,255,.5),0 0 40px rgba(0,229,255,.2);letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:titleGlow 3s ease-in-out infinite;}
+@keyframes titleGlow{0%,100%{text-shadow:0 0 16px rgba(0,229,255,.4),0 0 32px rgba(0,229,255,.2)}50%{text-shadow:0 0 24px rgba(0,229,255,.6),0 0 48px rgba(0,229,255,.3)}}
+.top-actions{display:flex;align-items:center;gap:8px;white-space:nowrap;flex:1;justify-content:flex-end;}
 .sound-btn,.refresh-btn,.day-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(0,229,255,0.34);background:rgba(15,21,40,.88);color:#00e5ff;border-radius:999px;padding:5px 10px;font-size:var(--fs-label);cursor:pointer;box-shadow:0 0 12px rgba(0,229,255,.12);white-space:nowrap;}
 .refresh-btn{background:rgba(0,229,255,.12);}
 .day-btn.active{background:rgba(0,229,255,.24);color:#fff;border-color:rgba(0,229,255,.55);}
-.top-clock{text-align:right;}
-.top-date{font-size:var(--fs-label);color:rgba(232,234,246,.72);white-space:normal;line-height:1.2;word-break:break-all;max-width:28vw;}
-.top-time{font-size:var(--fs-topbar-clock);letter-spacing:.16em;color:#00e5ff;text-shadow:0 0 12px rgba(0,229,255,.45);font-weight:700;}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.72)}}
 @keyframes badgePulse{0%,100%{box-shadow:0 0 0 0 rgba(0,229,255,.45),0 0 12px rgba(0,229,255,.3)}50%{box-shadow:0 0 0 8px rgba(0,229,255,0),0 0 20px rgba(0,229,255,.55)}}
 @keyframes badgePulseRising{0%,100%{box-shadow:0 0 0 0 rgba(255,171,0,.45),0 0 12px rgba(255,171,0,.3)}50%{box-shadow:0 0 0 8px rgba(255,171,0,0),0 0 20px rgba(255,171,0,.55)}}
 @keyframes scanLine{0%{transform:translateY(-100%);opacity:0}18%,82%{opacity:.45}100%{transform:translateY(100%);opacity:0}}
 @keyframes borderGlow{0%,100%{box-shadow:0 8px 24px rgba(0,0,0,0.55),0 0 16px rgba(0,229,255,.12)}50%{box-shadow:0 8px 24px rgba(0,0,0,0.55),0 0 28px rgba(0,229,255,.24)}}
 @keyframes titleSpark{0%,100%{opacity:.75;-webkit-filter:drop-shadow(0 0 4px rgba(0,229,255,.45))}50%{opacity:1;-webkit-filter:drop-shadow(0 0 10px rgba(0,229,255,.85))}}
-@keyframes floatCloud{0%,100%{transform:translateX(-3px)}50%{transform:translateX(4px)}}
-@keyframes sunSpin{to{transform:rotate(360deg)}}
-@keyframes rainFall{0%{transform:translateY(-7px);opacity:0}30%{opacity:.9}100%{transform:translateY(14px);opacity:0}}
+@keyframes floatCloud{0%,100%{transform:translate(calc(-50% - 3px),-60%)}50%{transform:translate(calc(-50% + 4px),-60%)}}
+@keyframes sunSpin{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+@keyframes rainFall{0%{transform:translateX(-50%) translateY(-7px);opacity:0}30%{opacity:.9}100%{transform:translateX(-50%) translateY(14px);opacity:0}}
 @keyframes lightning{0%,78%,100%{opacity:.25;-webkit-filter:drop-shadow(0 0 2px #ffeb3b)}82%,88%{opacity:1;-webkit-filter:drop-shadow(0 0 12px #ffeb3b)}}
-@keyframes fogMove{0%,100%{transform:translateX(-5px);opacity:.45}50%{transform:translateX(6px);opacity:.85}}
-@keyframes snowFall{0%{transform:translateY(-5px) rotate(0deg);opacity:.2}50%{opacity:1}100%{transform:translateY(12px) rotate(180deg);opacity:.15}}
+@keyframes fogMove{0%,100%{transform:translateX(calc(-50% - 5px));opacity:.45}50%{transform:translateX(calc(-50% + 6px));opacity:.85}}
+@keyframes snowFall{0%{transform:translate(-50%,-50%) translateY(-5px) rotate(0deg);opacity:.2}50%{opacity:1}100%{transform:translate(-50%,-50%) translateY(12px) rotate(180deg);opacity:.15}}
 @keyframes dataPulse{0%,100%{text-shadow:0 0 8px rgba(0,229,255,.28);-webkit-filter:brightness(1)}50%{text-shadow:0 0 16px rgba(0,229,255,.72);-webkit-filter:brightness(1.16)}}
 @keyframes shimmerX{0%{transform:translateX(-120%);opacity:0}18%,82%{opacity:.75}100%{transform:translateX(120%);opacity:0}}
 @keyframes radarSweep{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
@@ -1833,7 +1830,12 @@ body{
 @keyframes tableScan{0%,100%{background-color:transparent}50%{background-color:rgba(0,229,255,.10)}}
 @keyframes chartAura{0%,100%{opacity:.22;transform:translateX(-8%)}50%{opacity:.48;transform:translateX(8%)}}
 .content{height:calc(100vh - 56px);padding:16px;display:flex;flex-direction:column;position:relative;overflow:hidden;}
-.row-main{display:flex;flex:1;min-height:0;gap:16px;}
+.quad-grid{display:grid;grid-template-columns:4fr 6fr;grid-template-rows:1fr 1fr;gap:16px;flex:1;min-height:0;}
+.quad{display:flex;flex-direction:column;min-width:0;min-height:0;gap:0;}
+.quad .card{flex:1;min-height:0;}
+.quad-tl{display:flex;flex-direction:column;gap:16px;}
+.quad-tl .time-card{flex:0 0 auto;}
+.quad-tl .weather-card{flex:1;min-height:0;}
 .card{
   position:relative;min-width:0;min-height:0;overflow:hidden;padding:16px;border-radius:12px;
   background:rgba(15,21,40,0.86);border:1px solid rgba(0,229,255,0.16);box-shadow:0 8px 24px rgba(0,0,0,0.55),0 0 22px rgba(0,229,255,0.18);
@@ -1841,17 +1843,42 @@ body{
 }
 .card::before{content:"";position:absolute;top:0;right:0;bottom:0;left:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,229,255,.012) 2px,rgba(0,229,255,.012) 4px);pointer-events:none;z-index:1;}
 .card::after{content:"";position:absolute;left:0;right:0;top:0;height:42%;background:linear-gradient(180deg,transparent,rgba(0,229,255,.08),transparent);pointer-events:none;z-index:1;animation:scanLine 7s linear infinite;}
-.right-stack-card{display:flex;flex-direction:column;gap:16px;border:none;background:none;box-shadow:none;animation:none;padding:0;overflow:visible;min-height:0;flex:2;}
-.right-stack-card::before,.right-stack-card::after{display:none;}
-.right-stack-card>.card{border-radius:12px;margin-right:0;}
-.right-stack-card>.map-card{flex:7;min-height:0;}
-.right-stack-card>.chart-card{flex:3;min-height:0;}
-.left-stack-card{display:flex;flex-direction:column;gap:16px;border:none;background:none;box-shadow:none;animation:none;padding:0;overflow:visible;min-height:0;min-width:0;flex:1;}
-.left-stack-card::before,.left-stack-card::after{display:none;}
-.left-stack-card>.card{border-radius:12px;margin-right:0;}
-.left-stack-card>.weather-card{flex:4;min-height:0;}
-.left-stack-card>.tide-card{flex:6;min-height:0;}
-.left-stack-card>.alarm-list-card{flex:1;min-height:0;}
+/* 时间卡片 */
+.time-card{padding:14px 20px;}
+.time-display{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;}
+.time-main{display:flex;align-items:baseline;justify-content:center;}
+.time-big{font-size:clamp(36px,4.5vw,64px);font-weight:800;color:#00e5ff;letter-spacing:.12em;text-shadow:0 0 20px rgba(0,229,255,.55),0 0 40px rgba(0,229,255,.25);line-height:1;font-family:Consolas,"Courier New",monospace;}
+.time-sub{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;}
+.date-big{font-size:clamp(16px,1.6vw,24px);font-weight:700;color:rgba(232,234,246,.9);letter-spacing:.05em;}
+.lunar-big{font-size:clamp(18px,1.8vw,26px);font-weight:800;color:#ffab00;text-shadow:0 0 12px rgba(255,171,0,.45);letter-spacing:.06em;}
+/* 潮汐状态动画背景 */
+.tide-status-cell{position:relative;overflow:hidden;}
+.tide-status-bg{position:absolute;top:0;left:0;right:0;bottom:0;opacity:0;transition:opacity .5s ease;pointer-events:none;z-index:0;overflow:hidden;}
+.tide-status-bg::before{content:"";position:absolute;left:0;right:0;height:200%;background-repeat:repeat;background-size:28px 14px;}
+.rising-bg::before{top:0;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 14'><path d='M14 1 L27 13 L22 13 L14 7 L6 13 L1 13 Z' fill='rgba(255,82,82,0.35)'/></svg>");animation:risingArrows 1.2s linear infinite;}
+.falling-bg::before{bottom:0;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 14'><path d='M14 13 L27 1 L22 1 L14 7 L6 1 L1 1 Z' fill='rgba(0,230,118,0.35)'/></svg>");animation:fallingArrows 1.2s linear infinite;}
+.tide-status-cell.is-rising .rising-bg{opacity:1;}
+.tide-status-cell.is-falling .falling-bg{opacity:1;}
+.tide-status-cell .status-badge{position:relative;z-index:2;}
+@keyframes risingArrows{0%{background-position:0 14px}100%{background-position:0 0}}
+@keyframes fallingArrows{0%{background-position:0 0}100%{background-position:0 14px}}
+/* 潮段进度水流背景 */
+.tide-progress-cell{position:relative;overflow:hidden;}
+.tide-water-bg{position:absolute;left:0;right:0;bottom:0;height:0%;background:linear-gradient(180deg,rgba(0,229,255,.12) 0%,rgba(0,229,255,.28) 50%,rgba(0,229,255,.38) 100%);transition:height .8s cubic-bezier(.2,.8,.2,1);pointer-events:none;z-index:0;overflow:hidden;}
+.tide-water-bg::before{content:"";position:absolute;top:0;left:-50%;right:-50%;height:100%;background-image:repeating-linear-gradient(0deg,transparent 0,transparent 6px,rgba(255,255,255,.08) 6px,rgba(255,255,255,.08) 7px,transparent 7px,transparent 14px,rgba(0,229,255,.15) 14px,rgba(0,229,255,.15) 15px);background-size:100% 15px;}
+.tide-water-bg::after{content:"";position:absolute;top:-18px;left:-100%;width:300%;height:20px;}
+.tide-water-bg .wave-layer{position:absolute;left:-100%;width:300%;background-repeat:repeat-x;}
+.tide-water-bg .wave-layer.wave-1{top:-22px;height:30px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 30' preserveAspectRatio='none'><path d='M0 15 Q12.5 0 25 15 T50 15 T75 15 T100 15 V30 H0 Z' fill='rgba(0,229,255,0.6)'/></svg>");background-size:100px 30px;animation:waveSway1 4s linear infinite;}
+.tide-water-bg .wave-layer.wave-2{top:-14px;height:24px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 24' preserveAspectRatio='none'><path d='M0 12 Q10 0 20 12 T40 12 T60 12 T80 12 V24 H0 Z' fill='rgba(0,229,255,0.45)'/></svg>");background-size:80px 24px;animation:waveSway2 3s linear infinite;}
+.tide-water-bg .wave-layer.wave-3{top:-7px;height:16px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' preserveAspectRatio='none'><path d='M0 8 Q7.5 0 15 8 T30 8 T45 8 T60 8 V16 H0 Z' fill='rgba(255,255,255,0.35)'/></svg>");background-size:60px 16px;animation:waveSway3 2.5s linear infinite;}
+.tide-progress-cell.is-rising .tide-water-bg::before{animation:waterRise 1.5s linear infinite;}
+.tide-progress-cell.is-falling .tide-water-bg::before{animation:waterFall 1.5s linear infinite;}
+.tide-progress-cell .label,.tide-progress-cell .data-value{position:relative;z-index:2;}
+@keyframes waterRise{0%{background-position:0 15px}100%{background-position:0 0}}
+@keyframes waterFall{0%{background-position:0 0}100%{background-position:0 15px}}
+@keyframes waveSway1{0%{transform:translateX(0)}100%{transform:translateX(100px)}}
+@keyframes waveSway2{0%{transform:translateX(0)}100%{transform:translateX(80px)}}
+@keyframes waveSway3{0%{transform:translateX(0)}100%{transform:translateX(60px)}}
 .map-card{min-width:0;width:100%;}
 .alarm-bar{position:relative;z-index:20;display:flex;align-items:center;height:30px;padding:0 16px;background:rgba(255,43,43,.18);border-bottom:1px solid rgba(255,43,43,.35);overflow:hidden;}
 .alarm-bar-label{flex:0 0 auto;font-size:var(--fs-label);font-weight:800;color:#ff2b2b;text-shadow:0 0 8px rgba(255,43,43,.5);letter-spacing:.08em;margin-right:12px;}
@@ -1909,15 +1936,15 @@ body{
 .tl{display:none}.tr{right:8px;top:8px;border-right:1px solid;border-top:1px solid}
 .bl{left:8px;bottom:8px;border-left:1px solid;border-bottom:1px solid}.br{right:8px;bottom:8px;border-right:1px solid;border-bottom:1px solid}
 .module-title{
-  position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:10px;
-  color:rgba(232,234,246,0.66);font-size:var(--fs-module-title);font-weight:700;letter-spacing:.12em;text-transform:uppercase;
-  padding-bottom:10px;margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,.12);
-  min-width:0;overflow:hidden;
+  position:relative;z-index:2;display:flex;align-items:center;justify-content:flex-start;gap:10px;
+  color:#00e5ff;font-size:var(--fs-topbar-code);font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  padding-bottom:10px;margin-bottom:12px;border-bottom:1px solid rgba(0,229,255,.15);
+  min-width:0;overflow:hidden;text-shadow:0 0 12px rgba(0,229,255,.5);
 }
-.module-title::before{content:"";width:3px;height:14px;border-radius:2px;background:#00e5ff;box-shadow:0 0 8px rgba(0,229,255,.65);margin-right:6px;animation:titleSpark 2.4s ease-in-out infinite;}
-.module-title span:first-child{display:flex;align-items:center;color:rgba(232,234,246,0.66);min-width:0;line-height:1.3;}
-.module-title small{font-size:var(--fs-label);color:rgba(232,234,246,.70);letter-spacing:0;text-transform:none;font-weight:600;line-height:1.3;max-width:45%;}
-.module-title small.update-time{font-size:var(--fs-label);color:rgba(232,234,246,.45);font-weight:400;max-width:35%;flex-shrink:0;}
+.module-title::before{content:"";width:3px;height:14px;border-radius:2px;background:#00e5ff;box-shadow:0 0 8px rgba(0,229,255,.65);margin-right:8px;animation:titleSpark 2.4s ease-in-out infinite;}
+.module-title span:first-child{display:flex;align-items:center;color:#00e5ff;min-width:0;line-height:1.3;text-shadow:0 0 12px rgba(0,229,255,.5);}
+.module-title small{font-size:var(--fs-label);color:rgba(232,234,246,.55);letter-spacing:0;text-transform:none;font-weight:500;line-height:1.3;margin-left:auto;}
+.module-title small.update-time{font-size:var(--fs-label);color:rgba(232,234,246,.4);font-weight:400;flex-shrink:0;}
 .module-unavailable{position:relative;z-index:2;text-align:center;padding:32px 16px;color:rgba(232,234,246,.35);font-size:var(--fs-value);font-weight:600;letter-spacing:.08em;}
 .data-value{color:#00e5ff;text-shadow:0 0 10px rgba(0,229,255,.35);font-weight:800;}
 .metric-grid{position:relative;z-index:2;display:flex;flex-wrap:wrap;flex:1;align-content:flex-start;}
@@ -1934,37 +1961,41 @@ body{
 .metric:nth-child(6)::after,.extra-box:nth-child(6)::after{animation-delay:3.5s}
 .metric .label{font-size:var(--fs-label);color:rgba(232,234,246,.78);margin-bottom:6px;line-height:1.35;font-weight:600;letter-spacing:.03em;}
 .metric strong{position:relative;z-index:1;font-size:var(--fs-value);color:#00e5ff;text-shadow:0 0 8px rgba(0,229,255,.32);white-space:nowrap;animation:dataPulse 4.8s ease-in-out infinite;}
-.wind-compass-wrap{position:relative;z-index:1;display:flex;align-items:center;gap:8px;min-width:0;}
+.wind-compass-wrap{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:8px;min-width:0;}
 .wind-compass{position:relative;flex:0 0 44px;width:44px;height:44px;border-radius:50%;border:1px solid rgba(0,229,255,.42);background:radial-gradient(circle,rgba(0,229,255,.16),rgba(6,10,20,.72));box-shadow:inset 0 0 10px rgba(0,229,255,.16),0 0 12px rgba(0,229,255,.14);}
 .wind-compass::before{content:"N";position:absolute;top:1px;left:50%;transform:translateX(-50%);font-size:9px;color:rgba(232,234,246,.72);font-weight:800;}
 .wind-needle{position:absolute;left:50%;top:50%;width:3px;height:28px;margin-left:-1.5px;margin-top:-14px;transform:rotate(0deg);transition:transform .9s cubic-bezier(.2,.8,.2,1);transform-origin:50% 50%;}
 .wind-needle::before{content:"";position:absolute;left:50%;top:0;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:16px solid #ffab00;-webkit-filter:drop-shadow(0 0 7px rgba(255,171,0,.8));}
 .wind-needle::after{content:"";position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:12px solid rgba(0,229,255,.68);}
 .wind-text{min-width:0;font-size:clamp(17px,1.25vw,23px);color:#00e5ff;font-weight:800;text-shadow:0 0 8px rgba(0,229,255,.32);white-space:nowrap;}
+.wind-text-big{font-size:clamp(22px,1.8vw,32px);text-align:center;}
 .temp-strip{position:relative;z-index:2;margin-bottom:12px;display:flex;flex-wrap:wrap;min-width:0;flex-shrink:0;}
 .temp-card{position:relative;overflow:hidden;min-width:0;flex:1;border-radius:9px;padding:10px;background:rgba(6,10,20,.74);border:1px solid rgba(255,255,255,.08);}
-.temp-card .label{font-size:clamp(13px,0.92vw,17px);color:rgba(232,234,246,.78);font-weight:600;margin-bottom:5px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.temp-card .value{position:relative;z-index:1;font-size:clamp(17px,1.25vw,23px);line-height:1.05;color:#00e5ff;font-weight:800;text-shadow:0 0 8px rgba(0,229,255,.34);white-space:nowrap;animation:dataPulse 4.2s ease-in-out infinite;}
+.temp-card .label{font-size:clamp(13px,0.92vw,17px);color:rgba(232,234,246,.78);font-weight:600;margin-bottom:5px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;}
+.temp-card .value{position:relative;z-index:1;font-size:clamp(17px,1.25vw,23px);line-height:1.05;color:#00e5ff;font-weight:800;text-shadow:0 0 8px rgba(0,229,255,.34);white-space:nowrap;animation:dataPulse 4.2s ease-in-out infinite;text-align:center;}
 .temp-card.primary{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;}
 .temp-card.primary .label{margin-bottom:0;}
 .temp-card.primary .value{font-size:clamp(24px,2.2vw,36px);flex:0 0 auto;}
-.weather-hero{position:relative;z-index:2;margin-bottom:12px;min-width:0;overflow:hidden;display:flex;align-items:stretch;gap:12px;flex:1;min-height:0;}
-.weather-hero-left{flex:1;display:flex;align-items:center;gap:12px;min-width:0;padding:10px 12px;border-radius:9px;background:rgba(6,10,20,.74);border:1px solid rgba(255,255,255,.08);}
-.weather-hero-right{flex:1;display:flex;flex-direction:column;justify-content:center;min-width:0;padding:10px 12px;border-radius:9px;background:rgba(6,10,20,.74);border:1px solid rgba(255,255,255,.08);}
-.weather-hero-right .label{font-size:clamp(13px,0.92vw,17px);color:rgba(232,234,246,.66);font-weight:600;margin-bottom:6px;white-space:nowrap;}
+.weather-grid{position:relative;z-index:2;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:10px;flex:1;min-height:0;}
+.weather-cell{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:10px;padding:10px 8px;background:rgba(6,10,20,.74);border:1px solid rgba(255,255,255,.08);min-width:0;}
+.weather-cell .label{font-size:clamp(13px,0.92vw,17px);color:rgba(232,234,246,.78);font-weight:600;margin-bottom:6px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;order:1;flex:0 0 auto;}
+.weather-cell-inner{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:0;width:100%;order:2;}
+.weather-data-text{font-size:clamp(22px,2vw,32px);color:#00e5ff;font-weight:800;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:-1px -1px 0 rgba(0,0,0,.85),1px -1px 0 rgba(0,0,0,.85),-1px 1px 0 rgba(0,0,0,.85),1px 1px 0 rgba(0,0,0,.85),0 2px 4px rgba(0,0,0,.6),0 0 14px rgba(0,229,255,.5);}
+.weather-data-value{font-size:clamp(22px,2vw,32px);color:#00e5ff;font-weight:800;text-shadow:-1px -1px 0 rgba(0,0,0,.85),1px -1px 0 rgba(0,0,0,.85),-1px 1px 0 rgba(0,0,0,.85),1px 1px 0 rgba(0,0,0,.85),0 2px 4px rgba(0,0,0,.6),0 0 14px rgba(0,229,255,.5);white-space:nowrap;}
+.weather-cell .wind-text-big{font-size:clamp(22px,2vw,32px);text-align:center;color:#00e5ff;font-weight:800;text-shadow:-1px -1px 0 rgba(0,0,0,.85),1px -1px 0 rgba(0,0,0,.85),-1px 1px 0 rgba(0,0,0,.85),1px 1px 0 rgba(0,0,0,.85),0 2px 4px rgba(0,0,0,.6),0 0 14px rgba(0,229,255,.5);}
 /* weather-current and weather-current-temp removed - simplified layout */
 .weather-icon{position:relative;flex:0 0 56px;width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(6,10,20,.70);border:1px solid rgba(255,255,255,.08);box-shadow:inset 0 0 16px rgba(0,229,255,.10),0 0 18px rgba(0,229,255,.08);overflow:hidden;}
 .weather-icon::before,.weather-icon::after{content:"";position:absolute;display:block;}
 .weather-text-wrap{min-width:0;overflow:hidden;}
-.weather-icon.sunny::before{width:20px;height:20px;border-radius:50%;background:#ffeb3b;box-shadow:0 0 18px rgba(255,235,59,.85);}
-.weather-icon.sunny::after{width:34px;height:34px;border-radius:50%;border:2px dashed rgba(255,235,59,.72);animation:sunSpin 8s linear infinite;}
-.weather-icon.cloudy::before,.weather-icon.rainy::before,.weather-icon.storm::before,.weather-icon.snow::before{width:30px;height:16px;left:8px;top:17px;border-radius:16px;background:linear-gradient(180deg,#d8f6ff,#7fb8d5);box-shadow:9px -8px 0 -1px #b9e6f5,-9px -5px 0 -3px #e7fbff;animation:floatCloud 3s ease-in-out infinite;}
-.weather-icon.cloudy::after{width:38px;height:10px;left:4px;bottom:9px;border-radius:999px;background:rgba(0,229,255,.18);-webkit-filter:blur(4px);}
-.weather-icon.rainy::after{width:3px;height:13px;left:15px;top:30px;border-radius:3px;background:#00e5ff;box-shadow:9px -4px 0 #00e5ff,18px 1px 0 #00e5ff;animation:rainFall 1.1s linear infinite;}
-.weather-icon.storm::after{width:14px;height:20px;left:19px;top:25px;background:#ffeb3b;clip-path:polygon(42% 0,100% 0,61% 44%,92% 44%,30% 100%,45% 55%,10% 55%);animation:lightning 1.8s linear infinite;}
-.weather-icon.fog::before,.weather-icon.fog::after{left:8px;right:8px;height:3px;border-radius:999px;background:rgba(232,234,246,.75);box-shadow:0 9px 0 rgba(232,234,246,.52),0 18px 0 rgba(232,234,246,.38);animation:fogMove 2.8s ease-in-out infinite;}
+.weather-icon.sunny::before{width:20px;height:20px;border-radius:50%;background:#ffeb3b;box-shadow:0 0 18px rgba(255,235,59,.85);left:50%;top:50%;transform:translate(-50%,-50%);}
+.weather-icon.sunny::after{width:34px;height:34px;border-radius:50%;border:2px dashed rgba(255,235,59,.72);animation:sunSpin 8s linear infinite;left:50%;top:50%;transform:translate(-50%,-50%);}
+.weather-icon.cloudy::before,.weather-icon.rainy::before,.weather-icon.storm::before,.weather-icon.snow::before{width:30px;height:16px;left:50%;top:50%;transform:translate(-50%,-60%);border-radius:16px;background:linear-gradient(180deg,#d8f6ff,#7fb8d5);box-shadow:9px -8px 0 -1px #b9e6f5,-9px -5px 0 -3px #e7fbff;animation:floatCloud 3s ease-in-out infinite;}
+.weather-icon.cloudy::after{width:38px;height:10px;left:50%;bottom:10px;transform:translateX(-50%);border-radius:999px;background:rgba(0,229,255,.18);-webkit-filter:blur(4px);}
+.weather-icon.rainy::after{width:3px;height:13px;left:50%;top:58%;transform:translateX(-50%);border-radius:3px;background:#00e5ff;box-shadow:9px -4px 0 #00e5ff,18px 1px 0 #00e5ff;animation:rainFall 1.1s linear infinite;}
+.weather-icon.storm::after{width:14px;height:20px;left:50%;top:55%;transform:translate(-50%,-50%);background:#ffeb3b;clip-path:polygon(42% 0,100% 0,61% 44%,92% 44%,30% 100%,45% 55%,10% 55%);animation:lightning 1.8s linear infinite;}
+.weather-icon.fog::before,.weather-icon.fog::after{left:50%;transform:translateX(-50%);width:36px;height:3px;border-radius:999px;background:rgba(232,234,246,.75);box-shadow:0 9px 0 rgba(232,234,246,.52),0 18px 0 rgba(232,234,246,.38);animation:fogMove 2.8s ease-in-out infinite;}
 .weather-icon.fog::before{top:12px}.weather-icon.fog::after{top:18px;animation-delay:.8s;opacity:.6;}
-.weather-icon.snow::after{content:"✦";left:12px;top:27px;color:#e8f8ff;font-size:12px;text-shadow:11px -3px 0 #e8f8ff,20px 4px 0 #e8f8ff;animation:snowFall 1.9s linear infinite;}
+.weather-icon.snow::after{content:"✦";left:50%;top:50%;transform:translate(-50%,-50%);color:#e8f8ff;font-size:12px;text-shadow:11px -3px 0 #e8f8ff,20px 4px 0 #e8f8ff;animation:snowFall 1.9s linear infinite;}
 .status-big{position:relative;z-index:2;display:flex;flex-direction:column;margin-bottom:6px;gap:5px;flex:0 0 auto;}
 .status-inline-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 .status-inline-row .status-badge{font-size:calc(var(--fs-badge) * 1.15);padding:6px 16px;}
@@ -2014,9 +2045,23 @@ body{
 .ocean-row:nth-child(4) .ocean-cell:nth-child(2)::after{animation-delay:6.3s}
 .ocean-row:nth-child(4) .ocean-cell:nth-child(3)::after{animation-delay:7s}
 .ocean-cell .label{font-size:var(--fs-label-big);color:rgba(232,234,246,.82);font-weight:700;margin-bottom:6px;line-height:1.3;letter-spacing:.04em;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
-.ocean-cell strong{font-size:var(--fs-value-big);color:#00e5ff;font-weight:800;text-shadow:0 0 10px rgba(0,229,255,.32);white-space:nowrap;text-align:center;display:inline-flex;align-items:baseline;gap:2px;}
-.ocean-cell strong small{font-size:calc(var(--fs-value-big) * 0.55);color:rgba(232,234,246,.66);margin-left:2px;font-weight:600;white-space:nowrap;}
+.ocean-cell strong{font-size:var(--fs-value-big);color:#00e5ff;font-weight:800;text-shadow:-1px -1px 0 rgba(0,0,0,.8),1px -1px 0 rgba(0,0,0,.8),-1px 1px 0 rgba(0,0,0,.8),1px 1px 0 rgba(0,0,0,.8),0 2px 4px rgba(0,0,0,.6),0 0 14px rgba(0,229,255,.45);white-space:nowrap;text-align:center;display:inline-flex;align-items:baseline;gap:2px;}
+.ocean-cell strong small{font-size:calc(var(--fs-value-big) * 0.55);color:inherit;margin-left:2px;font-weight:600;white-space:nowrap;}
 .ocean-cell .status-badge{font-size:var(--fs-value-big);padding:6px 18px;margin-top:0;}
+/* 橙色数据单元格 */
+.cell-orange .label{color:#ffab00;}
+.cell-orange strong{color:#ffab00;text-shadow:-1px -1px 0 rgba(0,0,0,.85),1px -1px 0 rgba(0,0,0,.85),-1px 1px 0 rgba(0,0,0,.85),1px 1px 0 rgba(0,0,0,.85),0 2px 4px rgba(0,0,0,.6),0 0 14px rgba(255,171,0,.55);}
+.cell-orange strong small{color:inherit;}
+/* 满潮行红字、低潮行绿字 */
+.row-high-tide .ocean-cell .label{color:#ff5252;text-shadow:0 0 8px rgba(255,82,82,.4);}
+.row-high-tide .ocean-cell strong{color:#ff5252;text-shadow:-1px -1px 0 rgba(0,0,0,.85),1px -1px 0 rgba(0,0,0,.85),-1px 1px 0 rgba(0,0,0,.85),1px 1px 0 rgba(0,0,0,.85),0 2px 4px rgba(0,0,0,.6),0 0 14px rgba(255,82,82,.6);}
+.row-high-tide .ocean-cell strong small{color:inherit;}
+.row-low-tide .ocean-cell .label{color:#00e676;text-shadow:0 0 8px rgba(0,230,118,.4);}
+.row-low-tide .ocean-cell strong{color:#00e676;text-shadow:-1px -1px 0 rgba(0,0,0,.85),1px -1px 0 rgba(0,0,0,.85),-1px 1px 0 rgba(0,0,0,.85),1px 1px 0 rgba(0,0,0,.85),0 2px 4px rgba(0,0,0,.6),0 0 14px rgba(0,230,118,.6);}
+.row-low-tide .ocean-cell strong small{color:inherit;}
+/* 涨潮退潮状态文字颜色 */
+.tide-status-cell.is-rising .status-badge{color:#ff5252;border-color:rgba(255,82,82,.5);background:rgba(255,82,82,.15);text-shadow:-1px -1px 0 rgba(0,0,0,.85),1px -1px 0 rgba(0,0,0,.85),-1px 1px 0 rgba(0,0,0,.85),1px 1px 0 rgba(0,0,0,.85),0 2px 4px rgba(0,0,0,.6),0 0 14px rgba(255,82,82,.6);}
+.tide-status-cell.is-falling .status-badge{color:#00e676;border-color:rgba(0,230,118,.5);background:rgba(0,230,118,.15);text-shadow:-1px -1px 0 rgba(0,0,0,.85),1px -1px 0 rgba(0,0,0,.85),-1px 1px 0 rgba(0,0,0,.85),1px 1px 0 rgba(0,0,0,.85),0 2px 4px rgba(0,0,0,.6),0 0 14px rgba(0,230,118,.6);}
 /* ocean-extra-bar removed - items moved into first row */
 .tide-card .beach-list{margin-top:6px;flex:0 0 auto;max-height:160px;}
 .extra-box{position:relative;overflow:hidden;min-width:0;border-radius:9px;padding:4px 8px;background:rgba(6,10,20,.72);border:1px solid rgba(255,255,255,.08);}
@@ -2096,24 +2141,23 @@ th{background:rgba(0,229,255,.12);color:#00e5ff;font-weight:800;}
 }
 html.mobile .app{height:auto;min-height:100vh;overflow:visible}
 html.mobile{overflow:auto}
-html.mobile .topbar{height:auto;min-height:48px;flex:0 0 auto;flex-wrap:wrap;gap:4px 8px;padding:calc(8px + 0px) 10px 6px;align-items:center;position:relative;z-index:10}
-html.mobile .brand{width:100%;justify-content:center;gap:6px}
-html.mobile .brand-code{font-size:12px;letter-spacing:.12em}
-html.mobile .brand-title{font-size:12px;max-width:68vw}
-html.mobile .live{order:1;width:100%;justify-content:center;font-size:12px;gap:6px}
-html.mobile .top-actions{order:2;width:100%;justify-content:center;gap:6px;flex-wrap:wrap}
-html.mobile .sound-btn,html.mobile .refresh-btn,html.mobile .day-btn{font-size:12px;padding:5px 10px;min-width:0;justify-content:center}
+html.mobile .topbar{height:auto;min-height:48px;flex:0 0 auto;flex-wrap:wrap;gap:6px 8px;padding:10px 10px 8px;align-items:center;position:relative;z-index:10}
+html.mobile .brand{order:2;width:auto;justify-content:flex-start;gap:6px;flex:0 0 auto;}
+html.mobile .brand-code{font-size:11px;letter-spacing:.10em}
+html.mobile .topbar-title{order:1;flex:0 0 100%;width:100%;text-align:center;font-size:18px;letter-spacing:.08em;}
+html.mobile .top-actions{order:3;flex:1;justify-content:flex-end;gap:6px;flex-wrap:nowrap;min-width:0;}
+html.mobile .sound-btn,html.mobile .refresh-btn,html.mobile .day-btn{font-size:12px;padding:5px 8px;min-width:0;justify-content:center}
 html.mobile .sound-btn span{display:none}
 html.mobile .refresh-btn{min-width:auto}
-html.mobile .top-clock{order:3;width:100%;text-align:center}
-html.mobile .top-date{font-size:12px;white-space:normal;line-height:1.5;text-align:center;max-width:100%;display:block;}
-html.mobile .top-time{font-size:24px;letter-spacing:.10em;line-height:1.05;margin-top:1px;text-align:center;}
 html.mobile .content{padding:10px 10px 16px;height:auto;display:block;overflow:visible;position:static}
-html.mobile .row-main{display:block}
-html.mobile .left-stack-card{display:block;gap:0;}
-html.mobile .left-stack-card>.card{margin:10px 0;}
-html.mobile .right-stack-card{display:block;gap:0;}
-html.mobile .right-stack-card>.card{margin:10px 0;}
+html.mobile .quad-grid{display:block;}
+html.mobile .quad .card{margin:10px 0;}
+html.mobile .time-card{min-height:auto !important;padding:8px 12px;}
+html.mobile .time-display{gap:4px;}
+html.mobile .time-big{font-size:32px;}
+html.mobile .date-big{font-size:13px;}
+html.mobile .lunar-big{font-size:14px;}
+html.mobile .time-sub{gap:10px;}
 html.mobile .card{margin:10px 0;min-height:180px;padding:12px;}
 html.mobile .map-card{min-height:420px}
 html.mobile .chart-card{min-height:280px}
@@ -2141,12 +2185,12 @@ html.mobile .metric strong{font-size:15px;}
 html.mobile .temp-card .label{font-size:13px;}
 html.mobile .temp-card .value{font-size:16px;}
 html.mobile .temp-card.primary .value{font-size:24px;}
-/* weather-current mobile styles removed */
-html.mobile .weather-hero-right .label{font-size:13px;}
-html.mobile .wind-text{font-size:16px;}
-html.mobile .wind-compass{width:36px;height:36px;flex-basis:36px;}
-html.mobile .wind-needle{height:23px;margin-top:-11.5px;}
-html.mobile .weather-icon{width:42px;height:42px;flex-basis:42px;}
+html.mobile .weather-grid{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:8px;}
+html.mobile .weather-cell .label{font-size:12px;}
+html.mobile .weather-data-text{font-size:18px;}
+html.mobile .weather-data-value{font-size:18px;}
+html.mobile .weather-cell .wind-text-big{font-size:18px;}
+html.mobile .weather-icon{width:36px;height:36px;flex-basis:36px;}
 html.mobile .status-badge{font-size:14px;padding:5px 12px;}
 html.mobile .mini-box .label{font-size:11px;}
 html.mobile .mini-box .value{font-size:13px;}
@@ -2162,41 +2206,40 @@ html.mobile th,html.mobile td{font-size:11px;padding:5px 3px;}
 }
 body{background:radial-gradient(circle at 14% -8%,rgba(32,155,196,.22),transparent 34%),radial-gradient(circle at 92% 8%,rgba(63,81,181,.14),transparent 28%),#07101f;color:var(--text)}
 .topbar{height:64px;flex-basis:64px;padding:0 22px;background:rgba(6,13,27,.9);backdrop-filter:blur(18px);border-bottom-color:var(--line)}
-.brand-code{font-size:13px;letter-spacing:.12em}.brand-title{font-size:13px;color:var(--muted)}
+.brand-code{font-size:13px;letter-spacing:.12em}
+.topbar-title{font-size:clamp(20px,2.2vw,32px);letter-spacing:.15em;}
 .top-actions{padding:4px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);border-radius:999px}
 .sound-btn,.refresh-btn,.day-btn{min-height:32px;padding:6px 12px;border-color:transparent;background:transparent;box-shadow:none;color:var(--muted);transition:background .18s,color .18s,border-color .18s,transform .18s}
 .sound-btn:hover,.refresh-btn:hover,.day-btn:hover{background:rgba(66,215,245,.1);color:var(--text)}
 .sound-btn:focus-visible,.refresh-btn:focus-visible,.day-btn:focus-visible,.btn:focus-visible,.alarm-modal-close:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .refresh-btn{background:rgba(66,215,245,.1);color:var(--accent)}.day-btn.active{background:var(--accent);color:#04202a;border-color:transparent;font-weight:800}
-.content{height:calc(100vh - 94px);padding:14px;gap:14px}.content>.row-main{margin-bottom:0}.row-main,.left-stack-card,.right-stack-card{gap:14px}
+.content{height:calc(100vh - 94px);padding:14px;gap:14px}.content>.quad-grid{margin-bottom:0}.quad-grid{gap:14px}
 .card{padding:14px;border-radius:14px;background:linear-gradient(145deg,var(--surface),rgba(8,15,30,.82));border-color:var(--line);box-shadow:0 12px 32px rgba(0,0,0,.28);animation:none}
-.card::after{display:none}.card::before{opacity:.45}.right-stack-card>.card,.left-stack-card>.card{border-radius:14px}
-.module-title{font-size:12px;color:var(--text);letter-spacing:.08em;padding-bottom:9px;margin-bottom:10px}.module-title span:first-child{color:var(--text)}.module-title::before{background:var(--accent);animation:none}.module-title small,.module-title small.update-time{color:var(--muted)}
-.metric,.weather-hero-left,.weather-hero-right,.temp-card,.mini-box,.extra-box{background:rgba(4,11,24,.56);border-color:rgba(255,255,255,.075)}
+.card::after{display:none}.card::before{opacity:.45}.quad .card{border-radius:14px}
+.module-title{font-size:13px;letter-spacing:.12em;padding-bottom:9px;margin-bottom:10px;color:var(--accent);text-shadow:0 0 10px rgba(0,229,255,.4);border-bottom-color:rgba(0,229,255,.18)}.module-title span:first-child{color:var(--accent)}.module-title::before{background:var(--accent);animation:none}.module-title small,.module-title small.update-time{color:rgba(232,234,246,.5)}
+.metric,.weather-cell,.temp-card,.mini-box,.extra-box{background:rgba(4,11,24,.56);border-color:rgba(255,255,255,.075)}
 .metric::after,.temp-card::after,.mini-box::after,.extra-box::after{display:none}.metric strong,.data-value{color:var(--accent);animation:none;text-shadow:none}
 .cma-alarm-bar{height:30px;background:rgba(6,13,27,.86);border-bottom-color:var(--line)}
 .map-shell,#tideChart{border-radius:10px}.alarm-list-item{transition:background .18s,border-color .18s,transform .18s}
 button:disabled{cursor:wait;opacity:.65}.refresh-btn.is-loading{color:var(--text)}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
-@media (max-width:1079px){html:not(.mobile) .content{height:calc(100vh - 94px);overflow:auto}.row-main{min-height:520px}}
-@media (max-height:740px) and (min-width:1080px){.topbar{height:56px;flex-basis:56px}.content{height:calc(100vh - 86px);padding:10px;gap:10px}.row-main,.left-stack-card,.right-stack-card{gap:10px}.card{padding:10px}.module-title{margin-bottom:8px;padding-bottom:7px}}
+@media (max-width:1079px){html:not(.mobile) .content{height:calc(100vh - 94px);overflow:auto}.quad-grid{min-height:520px}}
+@media (max-height:740px) and (min-width:1080px){.topbar{height:56px;flex-basis:56px}.content{height:calc(100vh - 86px);padding:10px;gap:10px}.quad-grid{gap:10px}.quad-tl{gap:10px}.card{padding:10px}.module-title{margin-bottom:8px;padding-bottom:7px}}
 </style>
 </head>
 <body>
 <div class="app">
   <header class="topbar">
     <div class="brand">
-      <span class="brand-code">QINGDAO NO.6</span>
-      <span class="brand-title">青岛第六海水浴场 · 实时监测大屏</span>
+      <span class="brand-code">ZHANQIAO</span>
     </div>
-    <div class="live"><span class="live-dot"></span><span>实时在线</span><span id="globalUpdate">数据更新 --</span></div>
+    <div class="topbar-title">栈桥浴场 · 实时监测大屏</div>
     <div class="top-actions">
       <button id="todayBtn" class="day-btn active" type="button" aria-pressed="true" onclick="switchForecastDay(0)">今日</button>
       <button id="tomorrowBtn" class="day-btn" type="button" aria-pressed="false" onclick="switchForecastDay(1)">明日</button>
       <button id="refreshBtn" class="refresh-btn" type="button" aria-label="刷新全部数据" onclick="refreshAllData()">↻ 刷新</button>
       <button id="soundBtn" class="sound-btn" type="button" aria-label="切换提示音" aria-pressed="false" onclick="toggleSound()">🔇 <span>声音关</span></button>
     </div>
-    <div class="top-clock"><div id="dateText" class="top-date">--</div><div id="nowTime" class="top-time">--:--:--</div></div>
   </header>
 
   <div class="cma-alarm-bar" id="cmaAlarmBar">
@@ -2210,79 +2253,124 @@ button:disabled{cursor:wait;opacity:.65}.refresh-btn.is-loading{color:var(--text
   </div>
 
   <main class="content">
-    <section class="row-main">
-      <div class="left-stack-card">
-      <div class="card weather-card" id="weatherCard">
-        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-        <div class="module-title"><span>实时天气与风况</span><small id="weatherTime">--</small></div>
-        <div class="weather-hero">
-          <div class="weather-hero-left">
-            <div id="weatherIcon" class="weather-icon cloudy"></div>
-            <div id="weatherText" style="font-size:clamp(20px,1.7vw,30px);color:#e8eaf6;font-weight:800;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;">--</div>
-          </div>
-          <div class="weather-hero-right">
-            <div class="label">风向风级</div>
-            <div class="wind-compass-wrap"><div class="wind-compass"><div id="windNeedle" class="wind-needle"></div></div><div id="windDirection" class="wind-text">--</div></div>
-          </div>
-        </div>
-        <div class="temp-strip">
-          <div class="temp-card"><div id="tempRangeLabel" class="label">今日温度</div><div id="tempRange" class="value">--</div></div>
-          <div class="temp-card"><div class="label">湿度</div><div id="humidity" class="value">--</div></div>
-        </div>
-      </div>
-
-      <div class="card tide-card" id="tideCard">
-        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-        <div class="module-title"><span>海况数据</span><small id="tideUpdate">--</small></div>
-        <div class="ocean-data-grid">
-          <div class="ocean-row ocean-row-top">
-            <div class="ocean-cell"><div class="label">近海浪高</div><strong id="offshoreWaveHeight" class="data-value">--</strong></div>
-            <div class="ocean-cell"><div class="label">浴场水温</div><strong id="beachWaterTemp" class="data-value">--</strong></div>
-          </div>
-          <div class="ocean-row">
-            <div class="ocean-cell"><strong id="tideBadge" class="status-badge">等待加载</strong></div>
-            <div class="ocean-cell"><div class="label">当前潮高</div><strong id="currentLevel" class="data-value">--<small>cm</small></strong></div>
-            <div class="ocean-cell"><div class="label">潮段进度</div><strong id="tideProgress" class="data-value">--</strong></div>
-          </div>
-          <div class="ocean-row">
-            <div class="ocean-cell"><div class="label">下次高潮时间</div><strong id="nextHigh" class="data-value">--</strong></div>
-            <div class="ocean-cell"><div class="label">下次高潮潮高</div><strong id="nextHighLevel" class="data-value">--<small>cm</small></strong></div>
-            <div class="ocean-cell"><div class="label">距下次高潮</div><strong id="highDelta" class="data-value">--</strong></div>
-          </div>
-          <div class="ocean-row">
-            <div class="ocean-cell"><div class="label">下次低潮时间</div><strong id="nextLow" class="data-value">--</strong></div>
-            <div class="ocean-cell"><div class="label">下次低潮潮高</div><strong id="nextLowLevel" class="data-value">--<small>cm</small></strong></div>
-            <div class="ocean-cell"><div class="label">距下次低潮</div><strong id="lowDelta" class="data-value">--</strong></div>
+    <section class="quad-grid">
+      <!-- 左上：时间 + 天气 -->
+      <div class="quad quad-tl">
+        <div class="card time-card">
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <div class="time-display">
+            <div class="time-main">
+              <span id="nowTimeBig" class="time-big">--:--:--</span>
+            </div>
+            <div class="time-sub">
+              <span id="dateTextBig" class="date-big">--</span>
+              <span id="lunarTextBig" class="lunar-big">农历 --</span>
+            </div>
           </div>
         </div>
-      </div>
-      </div>
-
-      <div class="right-stack-card">
-      <div class="card map-card">
-        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-        <div class="module-title"><span>台风路径与云图</span><small>北海预报减灾中心</small></div>
-        <div class="map-shell">
-          <iframe id="typhoonFrame" class="typhoon-frame" title="台风路径与云图" loading="eager" src="https://www.bhyb.org.cn/typhoon/"></iframe>
-          <span class="map-label n40">40°N</span>
-          <span class="map-label n30">30°N</span>
-          <span class="map-label n20">20°N</span>
-          <span class="map-label e125">125°E</span>
-          <span class="map-label e130">130°E</span>
-          <span class="map-label e135">135°E</span>
-          <a class="mobile-map-open" href="https://www.bhyb.org.cn/typhoon/" target="_blank" rel="noopener">手机端打开台风图</a>
-          <div class="map-actions">
-            <button class="btn" onclick="reloadTyphoonFrame()">刷新图层</button>
-            <a class="btn" href="https://www.bhyb.org.cn/typhoon/" target="_blank">浏览器打开</a>
+        <div class="card weather-card" id="weatherCard">
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <div class="module-title"><span>实时天气与风况</span><small id="weatherTime">--</small></div>
+          <div class="weather-grid">
+            <div class="weather-cell">
+              <div class="weather-cell-inner">
+                <div id="weatherIcon" class="weather-icon cloudy"></div>
+                <div id="weatherText" class="weather-data-text">--</div>
+              </div>
+              <div class="label">天气状况</div>
+            </div>
+            <div class="weather-cell">
+              <div class="weather-cell-inner">
+                <div id="windDirection" class="wind-text wind-text-big">--</div>
+              </div>
+              <div class="label">风向风级</div>
+            </div>
+            <div class="weather-cell">
+              <div class="weather-cell-inner">
+                <div id="tempRange" class="weather-data-value">--</div>
+              </div>
+              <div class="label">今日温度</div>
+            </div>
+            <div class="weather-cell">
+              <div class="weather-cell-inner">
+                <div id="humidity" class="weather-data-value">--</div>
+              </div>
+              <div class="label">湿度</div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="card chart-card" id="chartCard">
-        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-        <div class="module-title"><span id="chartTitle">青岛今日潮汐曲线</span><small id="chartSource">全球潮汐平台</small><small id="chartTime" class="update-time">--</small></div>
-        <div id="tideChart">等待曲线数据</div>
+      <!-- 右上：台风图 -->
+      <div class="quad quad-tr">
+        <div class="card map-card">
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <div class="module-title"><span>台风路径与云图</span><small>北海预报减灾中心</small></div>
+          <div class="map-shell">
+            <iframe id="typhoonFrame" class="typhoon-frame" title="台风路径与云图" loading="eager" src="https://www.bhyb.org.cn/typhoon/"></iframe>
+            <span class="map-label n40">40°N</span>
+            <span class="map-label n30">30°N</span>
+            <span class="map-label n20">20°N</span>
+            <span class="map-label e125">125°E</span>
+            <span class="map-label e130">130°E</span>
+            <span class="map-label e135">135°E</span>
+            <a class="mobile-map-open" href="https://www.bhyb.org.cn/typhoon/" target="_blank" rel="noopener">手机端打开台风图</a>
+            <div class="map-actions">
+              <button class="btn" onclick="reloadTyphoonFrame()">刷新图层</button>
+              <a class="btn" href="https://www.bhyb.org.cn/typhoon/" target="_blank">浏览器打开</a>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <!-- 左下：海况数据 -->
+      <div class="quad quad-bl">
+        <div class="card tide-card" id="tideCard">
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <div class="module-title"><span>海况数据</span><small id="tideUpdate">--</small></div>
+          <div class="ocean-data-grid">
+            <div class="ocean-row ocean-row-top">
+              <div class="ocean-cell"><div class="label">近海浪高</div><strong id="offshoreWaveHeight" class="data-value">--</strong></div>
+              <div class="ocean-cell"><div class="label">浴场水温</div><strong id="beachWaterTemp" class="data-value">--</strong></div>
+            </div>
+            <div class="ocean-row">
+              <div class="ocean-cell tide-status-cell">
+                <div class="tide-status-bg rising-bg"></div>
+                <div class="tide-status-bg falling-bg"></div>
+                <strong id="tideBadge" class="status-badge">等待加载</strong>
+              </div>
+              <div class="ocean-cell cell-orange"><div class="label">当前潮高</div><strong id="currentLevel" class="data-value">--<small>cm</small></strong></div>
+              <div class="ocean-cell tide-progress-cell cell-orange">
+                <div class="tide-water-bg" id="tideWaterBg">
+                  <div class="wave-layer wave-1"></div>
+                  <div class="wave-layer wave-2"></div>
+                  <div class="wave-layer wave-3"></div>
+                </div>
+                <div class="label">潮段进度</div>
+                <strong id="tideProgress" class="data-value">--</strong>
+              </div>
+            </div>
+            <div class="ocean-row row-high-tide">
+              <div class="ocean-cell"><div class="label">下次满潮时间</div><strong id="nextHigh" class="data-value">--</strong></div>
+              <div class="ocean-cell"><div class="label">下次满潮潮高</div><strong id="nextHighLevel" class="data-value">--<small>cm</small></strong></div>
+              <div class="ocean-cell"><div class="label">距下次满潮</div><strong id="highDelta" class="data-value">--</strong></div>
+            </div>
+            <div class="ocean-row row-low-tide">
+              <div class="ocean-cell"><div class="label">下次低潮时间</div><strong id="nextLow" class="data-value">--</strong></div>
+              <div class="ocean-cell"><div class="label">下次低潮潮高</div><strong id="nextLowLevel" class="data-value">--<small>cm</small></strong></div>
+              <div class="ocean-cell"><div class="label">距下次低潮</div><strong id="lowDelta" class="data-value">--</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右下：潮汐曲线图 -->
+      <div class="quad quad-br">
+        <div class="card chart-card" id="chartCard">
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <div class="module-title"><span id="chartTitle">青岛今日潮汐曲线</span><small id="chartSource">全球潮汐平台</small><small id="chartTime" class="update-time">--</small></div>
+          <div id="tideChart">等待曲线数据</div>
+        </div>
       </div>
     </section>
   </main>
@@ -2368,10 +2456,12 @@ function nowParts(){
   var lunar=lunarText(d);
   return {
     time: String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0"),
-    date: d.getFullYear()+"年"+String(d.getMonth()+1).padStart(2,"0")+"月"+String(d.getDate()).padStart(2,"0")+"日 "+week+" · "+lunar
+    date: d.getFullYear()+"年"+String(d.getMonth()+1).padStart(2,"0")+"月"+String(d.getDate()).padStart(2,"0")+"日 "+week+" · "+lunar,
+    dateOnly: d.getFullYear()+"年"+String(d.getMonth()+1).padStart(2,"0")+"月"+String(d.getDate()).padStart(2,"0")+"日 "+week,
+    lunar: lunar
   };
 }
-function updateClock(){var p=nowParts();setText("nowTime",p.time);setText("dateText",p.date);}
+function updateClock(){var p=nowParts();setText("nowTime",p.time);setText("dateText",p.date);setText("nowTimeBig",p.time);setText("dateTextBig",p.dateOnly);setText("lunarTextBig",p.lunar);}
 function selectedDate(){
   var d=new Date();
   d.setDate(d.getDate()+selectedDayOffset);
@@ -2388,7 +2478,6 @@ function updateDayButtons(){
   if(today){if(selectedDayOffset===0){today.classList.add("active");}else{today.classList.remove("active");}today.setAttribute("aria-pressed",selectedDayOffset===0?"true":"false");}
   if(tomorrow){if(selectedDayOffset===1){tomorrow.classList.add("active");}else{tomorrow.classList.remove("active");}tomorrow.setAttribute("aria-pressed",selectedDayOffset===1?"true":"false");}
   setText("chartTitle","青岛"+selectedDayLabel()+"潮汐曲线");
-  setText("tempRangeLabel",selectedDayLabel()+"温度");
 }
 function switchForecastDay(offset){
   selectedDayOffset=offset;
@@ -2555,15 +2644,15 @@ function tideCurrentStatus(){
   }
   if(!next&&prev)next=list[0];
   if(!next)return "";
-  return (next.type==="高潮"?"涨潮中→":"落潮中→")+next.type;
+  return (next.type==="满潮"?"涨潮中→":"落潮中→")+next.type;
 }
 function renderTide(res,upTime){
   tideRawData=res; setText("tideUpdate","更新 "+(upTime||"--")); setText("globalUpdate","数据更新 "+(upTime||"--"));
   if(!res||!res.data||!Array.isArray(res.data.rows)){ return; }
   var item=res.data.rows[0]; if(!item){ return;}
   var list=[
-    {t:item.FIRSTHIGHTIME,l:item.FIRSTHIGHLEVEL,type:"高潮",cls:"high"},
-    {t:item.SECONDHIGHTIME,l:item.SECONDHEIGHTLEVEL,type:"高潮",cls:"high"},
+    {t:item.FIRSTHIGHTIME,l:item.FIRSTHIGHLEVEL,type:"满潮",cls:"high"},
+    {t:item.SECONDHIGHTIME,l:item.SECONDHEIGHTLEVEL,type:"满潮",cls:"high"},
     {t:item.FIRSTLOWTIME,l:item.FIRSTLOWLEVEL,type:"低潮",cls:"low"},
     {t:item.SECONDLOWTIME,l:item.SECONDLOWLEVEL,type:"低潮",cls:"low"}
   ].filter(function(i){return i.t&&i.t!=="-";}).sort(function(a,b){return (timeToMin(a.t)!=null?timeToMin(a.t):9999)-(timeToMin(b.t)!=null?timeToMin(b.t):9999);});
@@ -2637,6 +2726,13 @@ function calcTideStatus(list){
       badgeEl.classList.add(rising?"rising":"falling");
     }
   }
+  var statusCell=badgeEl?badgeEl.closest(".tide-status-cell"):null;
+  if(statusCell){
+    statusCell.classList.remove("is-rising","is-falling");
+    if(selectedDayOffset===0){
+      statusCell.classList.add(rising?"is-rising":"is-falling");
+    }
+  }
   if(selectedDayOffset===0&&lastTideRising!==null&&rising&&!lastTideRising&&soundEnabled){playRisingSound();}
   lastTideRising=rising;
   if(next){
@@ -2646,23 +2742,42 @@ function calcTideStatus(list){
       setText("tideProgress",phaseProgress+"%");
     }else{
       setText("tideProgress","0%");
+      phaseProgress=0;
     }
   }else{
     setText("tideProgress","--");
+    phaseProgress=0;
+  }
+  var waterBg=$("tideWaterBg");
+  if(waterBg){
+    var waterHeight=0;
+    if(rising){
+      waterHeight=phaseProgress||0;
+    }else{
+      waterHeight=100-(phaseProgress||0);
+    }
+    waterBg.style.height=waterHeight+"%";
+  }
+  var progressCell=waterBg?waterBg.closest(".tide-progress-cell"):null;
+  if(progressCell){
+    progressCell.classList.remove("is-rising","is-falling");
+    if(selectedDayOffset===0){
+      progressCell.classList.add(rising?"is-rising":"is-falling");
+    }
   }
   var currentLevel=interpolateCurrentLevel(curve,nowMin);
   setTextWithUnit("currentLevel",currentLevel!==null?currentLevel:"--","cm");
-  var highs=pts.filter(function(p){return p.type==="高潮";}), lows=pts.filter(function(p){return p.type==="低潮";});
+  var highs=pts.filter(function(p){return p.type==="满潮";}), lows=pts.filter(function(p){return p.type==="低潮";});
   var nextHigh=null,nextLow=null;
   for(var hi=0;hi<highs.length;hi++){if(highs[hi].min>nowMin){nextHigh=highs[hi];break;}}
   for(var li=0;li<lows.length;li++){if(lows[li].min>nowMin){nextLow=lows[li];break;}}
 
   // 如果今日没有更多高低潮，且是今日模式，则从明日数据中取第一个
   if(selectedDayOffset===0 && tomorrowTideList.length>0){
-    var tomHighs=tomorrowTideList.filter(function(p){return p.type==="高潮";});
+    var tomHighs=tomorrowTideList.filter(function(p){return p.type==="满潮";});
     var tomLows=tomorrowTideList.filter(function(p){return p.type==="低潮";});
     if(!nextHigh && tomHighs.length>0){
-      nextHigh={t:tomHighs[0].t,l:tomHighs[0].l,type:"高潮",min:timeToMin(tomHighs[0].t)+1440,isTomorrow:true};
+      nextHigh={t:tomHighs[0].t,l:tomHighs[0].l,type:"满潮",min:timeToMin(tomHighs[0].t)+1440,isTomorrow:true};
     }
     if(!nextLow && tomLows.length>0){
       nextLow={t:tomLows[0].t,l:tomLows[0].l,type:"低潮",min:timeToMin(tomLows[0].t)+1440,isTomorrow:true};
@@ -2767,14 +2882,14 @@ function renderChart(rawArr,msg,site){
   var maxVal=Math.max.apply(null,points.map(function(p){return p.value;}));
   var isMobileView=document.documentElement.classList.contains("mobile");
   var gridLeft=isMobileView?30:52, gridRight=isMobileView?30:52, gridTop=isMobileView?36:48, gridBottom=isMobileView?32:40;
-  var markData=points.filter(function(p){return p.pointType==="extrema";}).map(function(p){return {name:p.extremaType,coord:[p.label,p.value],value:p.value,labelText:p.extremaType+" "+p.label+"\n"+p.value+"cm",itemStyle:{color:p.extremaType==="高潮"?"#ffab00":"#00e676"},label:{formatter:function(params){return params.data.labelText;},color:p.extremaType==="高潮"?"#ffab00":"#00e676",fontSize:markFont,fontWeight:"bold",lineHeight:markFont+1,position:"right",distance:4,offset:[0,-14]}};});
+  var markData=points.filter(function(p){return p.pointType==="extrema";}).map(function(p){var isHigh=p.extremaType==="满潮";return {name:p.extremaType,coord:[p.label,p.value],value:p.value,labelText:p.extremaType+" "+p.label+"\n"+p.value+"cm",itemStyle:{color:isHigh?"#ff5252":"#00e676",shadowBlur:12,shadowColor:isHigh?"rgba(255,82,82,.6)":"rgba(0,230,118,.6)"},label:{formatter:function(params){return params.data.labelText;},color:isHigh?"#ff5252":"#00e676",fontSize:markFont,fontWeight:"bold",lineHeight:markFont+1,position:"right",distance:4,offset:[0,-14],textShadowColor:"rgba(0,0,0,.85)",textShadowBlur:6,textShadowOffsetX:0,textShadowOffsetY:1}};});
   tideChart.setOption({
     backgroundColor:"transparent",
     tooltip:{trigger:"axis",formatter:function(p){return "时间："+p[0].axisValue+"<br>潮高："+p[0].value+" cm";},backgroundColor:"rgba(15,21,40,.94)",borderColor:"rgba(0,229,255,.35)",textStyle:{color:"#e8eaf6",fontSize:axisFont}},
     grid:{left:gridLeft,right:gridRight,top:gridTop,bottom:gridBottom,containLabel:true},
-    xAxis:{type:"category",data:points.map(function(p){return p.label;}),axisLabel:{rotate:0,interval:2,fontSize:axisFont,margin:6,color:"rgba(232,234,246,.65)"},axisLine:{lineStyle:{color:"rgba(0,229,255,.28)"}},axisTick:{lineStyle:{color:"rgba(0,229,255,.22)"}}},
-    yAxis:{name:"潮高(cm)",type:"value",max:Math.ceil((maxVal+35)/50)*50,nameTextStyle:{fontSize:nameFont,color:"rgba(232,234,246,.65)"},axisLabel:{fontSize:axisFont,color:"rgba(232,234,246,.65)"},axisLine:{lineStyle:{color:"rgba(0,229,255,.28)"}},splitLine:{lineStyle:{color:"rgba(255,255,255,.07)"}}},
-    series:[{name:"潮高",type:"line",data:points.map(function(p){return p.value;}),smooth:true,symbolSize:6,itemStyle:{color:"#00e5ff"},lineStyle:{color:"#00e5ff",width:3,shadowBlur:10,shadowColor:"rgba(0,229,255,.45)"},areaStyle:{color:{type:"linear",colorStops:[{offset:0,color:"rgba(0,229,255,.26)"},{offset:1,color:"rgba(0,229,255,.03)"}]}},markPoint:{symbol:"circle",symbolSize:24,data:markData},markLine:{symbol:"none",silent:true,data:[],lineStyle:{color:"#ff5252",width:2,type:"solid",shadowBlur:8,shadowColor:"rgba(255,82,82,.5)"},label:{show:true,formatter:"现在",color:"#ff5252",fontSize:markFont,fontWeight:"bold",position:"end",distance:[4,0],backgroundColor:"rgba(6,10,20,.8)",padding:[2,6,2,6],borderRadius:3}}}]
+    xAxis:{type:"category",data:points.map(function(p){return p.label;}),axisLabel:{rotate:0,interval:2,fontSize:axisFont,margin:6,color:"rgba(232,234,246,.75)",textShadowColor:"rgba(0,0,0,.7)",textShadowBlur:4,textShadowOffsetX:0,textShadowOffsetY:1},axisLine:{lineStyle:{color:"rgba(0,229,255,.28)"}},axisTick:{lineStyle:{color:"rgba(0,229,255,.22)"}}},
+    yAxis:{name:"潮高(cm)",type:"value",max:Math.ceil((maxVal+35)/50)*50,nameTextStyle:{fontSize:nameFont,color:"rgba(232,234,246,.75)",textShadowColor:"rgba(0,0,0,.7)",textShadowBlur:4,textShadowOffsetX:0,textShadowOffsetY:1},axisLabel:{fontSize:axisFont,color:"rgba(232,234,246,.75)",textShadowColor:"rgba(0,0,0,.7)",textShadowBlur:4,textShadowOffsetX:0,textShadowOffsetY:1},axisLine:{lineStyle:{color:"rgba(0,229,255,.28)"}},splitLine:{lineStyle:{color:"rgba(255,255,255,.07)"}}},
+    series:[{name:"潮高",type:"line",data:points.map(function(p){return p.value;}),smooth:true,symbolSize:6,itemStyle:{color:"#00e5ff",shadowBlur:10,shadowColor:"rgba(0,229,255,.5)"},lineStyle:{color:"#00e5ff",width:3,shadowBlur:14,shadowColor:"rgba(0,229,255,.55)"},areaStyle:{color:{type:"linear",colorStops:[{offset:0,color:"rgba(0,229,255,.28)"},{offset:1,color:"rgba(0,229,255,.03)"}]}},markPoint:{symbol:"circle",symbolSize:24,data:markData},markLine:{symbol:"none",silent:true,data:[],lineStyle:{color:"#ffab00",width:2,type:"solid",shadowBlur:10,shadowColor:"rgba(255,171,0,.6)"},label:{show:true,formatter:"现在",color:"#ffab00",fontSize:markFont,fontWeight:"bold",position:"end",distance:[4,0],backgroundColor:"rgba(6,10,20,.85)",padding:[3,8,3,8],borderRadius:3,textShadowColor:"rgba(0,0,0,.85)",textShadowBlur:6,textShadowOffsetX:0,textShadowOffsetY:1}}}]
   },true);
   // 启动当前时间标线更新（明日模式下不显示）
   if(selectedDayOffset===0){
@@ -3174,8 +3289,8 @@ function loadTide(){fetchJSON(apiUrl("/api/tide"),20000,function(e,r){if(!r||e)r
       if(!r||e||!r.data||!r.data.rows||!r.data.rows.length){tomorrowTideList=[];return;}
       var item=r.data.rows[0];
       tomorrowTideList=[
-        {t:item.FIRSTHIGHTIME,l:item.FIRSTHIGHLEVEL,type:"高潮",cls:"high"},
-        {t:item.SECONDHIGHTIME,l:item.SECONDHEIGHTLEVEL,type:"高潮",cls:"high"},
+        {t:item.FIRSTHIGHTIME,l:item.FIRSTHIGHLEVEL,type:"满潮",cls:"high"},
+        {t:item.SECONDHIGHTIME,l:item.SECONDHEIGHTLEVEL,type:"满潮",cls:"high"},
         {t:item.FIRSTLOWTIME,l:item.FIRSTLOWLEVEL,type:"低潮",cls:"low"},
         {t:item.SECONDLOWTIME,l:item.SECONDLOWLEVEL,type:"低潮",cls:"low"}
       ].filter(function(i){return i.t&&i.t!=="-";}).sort(function(a,b){return (timeToMin(a.t)!=null?timeToMin(a.t):9999)-(timeToMin(b.t)!=null?timeToMin(b.t):9999);});
@@ -3251,7 +3366,7 @@ if __name__ == "__main__":
     t.start()
     time.sleep(1.2)
     webview.create_window(
-        "青岛潮汐与第六海水浴场天气海况",
+        "青岛潮汐与栈桥浴场天气海况",
         url=f"http://127.0.0.1:{PORT}",
         width=1280,
         height=760,
