@@ -1797,15 +1797,17 @@ body{
 }
 .app{width:100vw;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
 .topbar{
-  height:56px;flex:0 0 56px;display:flex;align-items:center;justify-content:space-between;
+  position:relative;height:56px;flex:0 0 56px;display:flex;align-items:center;justify-content:space-between;
   padding:0 24px;background:linear-gradient(180deg,rgba(10,14,26,.97),rgba(10,14,26,.78));
   border-bottom:1px solid rgba(0,229,255,0.16);box-shadow:0 2px 18px rgba(0,0,0,.42);z-index:10;
 }
 .brand{display:flex;align-items:center;gap:12px;min-width:0;overflow:hidden;flex:1;}
+.brand-icon{display:inline-flex;align-items:center;justify-content:center;color:#00e5ff;}
+.brand-icon svg{display:block;}
 .brand-code{font-size:var(--fs-topbar-code);letter-spacing:.16em;color:#00e5ff;text-shadow:0 0 12px rgba(0,229,255,.5);font-weight:700;}
 .brand-title{font-size:var(--fs-topbar-title);color:rgba(232,234,246,0.66);font-weight:600;line-height:1.3;}
-.topbar-title{flex:1;text-align:center;font-size:clamp(18px,2vw,28px);font-weight:800;color:#00e5ff;text-shadow:0 0 20px rgba(0,229,255,.5),0 0 40px rgba(0,229,255,.2);letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:titleGlow 3s ease-in-out infinite;}
-@keyframes titleGlow{0%,100%{text-shadow:0 0 16px rgba(0,229,255,.4),0 0 32px rgba(0,229,255,.2)}50%{text-shadow:0 0 24px rgba(0,229,255,.6),0 0 48px rgba(0,229,255,.3)}}
+.topbar-title{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:clamp(18px,2vw,28px);font-weight:800;letter-spacing:.1em;white-space:nowrap;overflow:hidden;background:linear-gradient(110deg,#00a8cc 0%,#00e5ff 30%,#e6f7ff 48%,#00e5ff 60%,#00a8cc 100%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 8px rgba(0,229,255,.45)) drop-shadow(0 0 18px rgba(0,229,255,.2));animation:titleShimmer 4s linear infinite;}
+@keyframes titleShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .top-actions{display:flex;align-items:center;gap:8px;white-space:nowrap;flex:0 0 auto;justify-content:flex-end;}
 .sound-btn,.refresh-btn,.day-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(0,229,255,0.34);background:rgba(15,21,40,.88);color:#00e5ff;border-radius:999px;padding:5px 10px;font-size:var(--fs-label);cursor:pointer;box-shadow:0 0 12px rgba(0,229,255,.12);white-space:nowrap;}
 .refresh-btn{background:rgba(0,229,255,.12);}
@@ -2143,8 +2145,9 @@ html.mobile .app{height:auto;min-height:100vh;overflow:visible}
 html.mobile{overflow:auto}
 html.mobile .topbar{height:auto;min-height:48px;flex:0 0 auto;flex-wrap:wrap;gap:6px 8px;padding:10px 10px 8px;align-items:center;position:relative;z-index:10}
 html.mobile .brand{order:2;width:auto;justify-content:flex-start;gap:6px;flex:0 0 auto;}
+html.mobile .brand-icon svg{width:36px;height:36px;}
 html.mobile .brand-code{font-size:11px;letter-spacing:.10em}
-html.mobile .topbar-title{order:1;flex:0 0 100%;width:100%;text-align:center;font-size:18px;letter-spacing:.08em;}
+html.mobile .topbar-title{order:1;flex:0 0 100%;width:100%;position:relative;left:auto;top:auto;transform:none;text-align:center;font-size:18px;letter-spacing:.08em;}
 html.mobile .top-actions{order:3;flex:0 0 auto;justify-content:flex-end;gap:6px;flex-wrap:nowrap;min-width:0;}
 html.mobile .sound-btn,html.mobile .refresh-btn,html.mobile .day-btn{font-size:12px;padding:5px 8px;min-width:0;justify-content:center}
 html.mobile .sound-btn span{display:none}
@@ -2231,7 +2234,13 @@ button:disabled{cursor:wait;opacity:.65}.refresh-btn.is-loading{color:var(--text
 <div class="app">
   <header class="topbar">
     <div class="brand">
-      <span class="brand-code">ZHANQIAO</span>
+      <span class="brand-icon" aria-hidden="true">
+        <svg viewBox="0 0 800 800" width="48" height="48" xmlns="http://www.w3.org/2000/svg">
+          <g transform="translate(190,613.84) scale(0.0525,-0.0525)" fill="currentColor">
+            <path d="M3766 6648 c-8 -13 -18 -41 -22 -63 -4 -22 -17 -58 -30 -80 -34 -60 -82 -370 -68 -441 5 -28 1 -35 -38 -66 -81 -66 -198 -139 -341 -213 -198 -103 -357 -169 -632 -263 -172 -60 -369 -136 -490 -191 -22 -10 -115 -48 -208 -85 -166 -67 -174 -69 -772 -215 -142 -35 -224 -83 -251 -148 -16 -37 -18 -140 -4 -177 17 -44 175 -250 225 -293 27 -23 72 -53 101 -67 52 -26 283 -106 363 -126 l44 -12 -7 -66 c-24 -232 -43 -342 -63 -364 -11 -13 -26 -33 -32 -46 -19 -36 -252 -146 -436 -205 -159 -51 -386 -109 -579 -147 -87 -17 -175 -38 -194 -46 -57 -24 -103 -64 -123 -108 -37 -81 -16 -149 81 -263 107 -125 253 -206 501 -279 l129 -37 0 -301 c0 -166 -4 -306 -8 -312 -21 -32 -154 -35 -288 -5 -134 30 -524 90 -586 91 l-38 0 0 -84 c0 -47 5 -88 10 -91 6 -4 52 -11 103 -17 149 -17 195 -27 201 -46 9 -29 10 -91 2 -99 -9 -9 -7 -9 -183 -11 l-133 -2 0 -147 0 -146 383 6 c210 4 618 12 907 18 672 15 774 16 2415 6 923 -5 1555 -4 1935 4 403 7 690 8 1000 0 239 -6 643 -13 898 -17 l462 -6 0 141 0 141 -307 0 c-170 0 -332 3 -360 6 -50 6 -53 8 -53 35 0 25 4 29 28 29 70 0 593 21 640 26 l52 5 0 60 c0 58 -1 59 -27 59 -16 0 -171 -5 -345 -10 -289 -10 -320 -9 -349 6 -43 22 -97 20 -269 -10 -80 -14 -191 -28 -247 -32 l-102 -7 -12 26 c-9 21 -9 68 -1 209 7 101 12 224 13 273 0 50 4 110 7 135 l7 45 90 13 c340 48 391 77 529 292 118 182 132 263 61 334 -45 45 -112 66 -387 121 -135 27 -278 63 -355 89 -232 78 -673 261 -678 280 -4 16 -35 357 -35 383 0 18 7 23 38 28 76 11 220 48 297 78 173 65 235 133 330 362 102 246 116 320 72 386 -39 60 -92 77 -283 94 -360 32 -521 71 -919 225 -88 34 -176 68 -195 75 -19 7 -147 61 -285 120 -137 59 -315 129 -395 157 -143 48 -563 249 -603 288 -16 14 -21 54 -38 256 -16 207 -22 246 -43 289 -13 27 -27 73 -31 100 -4 28 -12 56 -17 63 -16 19 -46 14 -62 -10z"/>
+          </g>
+        </svg>
+      </span>
     </div>
     <div class="topbar-title">栈桥浴场 · 实时监测大屏</div>
     <div class="top-actions">
