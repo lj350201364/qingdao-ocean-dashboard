@@ -1806,7 +1806,7 @@ body{
 .brand-title{font-size:var(--fs-topbar-title);color:rgba(232,234,246,0.66);font-weight:600;line-height:1.3;}
 .topbar-title{flex:1;text-align:center;font-size:clamp(18px,2vw,28px);font-weight:800;color:#00e5ff;text-shadow:0 0 20px rgba(0,229,255,.5),0 0 40px rgba(0,229,255,.2);letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:titleGlow 3s ease-in-out infinite;}
 @keyframes titleGlow{0%,100%{text-shadow:0 0 16px rgba(0,229,255,.4),0 0 32px rgba(0,229,255,.2)}50%{text-shadow:0 0 24px rgba(0,229,255,.6),0 0 48px rgba(0,229,255,.3)}}
-.top-actions{display:flex;align-items:center;gap:8px;white-space:nowrap;flex:1;justify-content:flex-end;}
+.top-actions{display:flex;align-items:center;gap:8px;white-space:nowrap;flex:0 0 auto;justify-content:flex-end;}
 .sound-btn,.refresh-btn,.day-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(0,229,255,0.34);background:rgba(15,21,40,.88);color:#00e5ff;border-radius:999px;padding:5px 10px;font-size:var(--fs-label);cursor:pointer;box-shadow:0 0 12px rgba(0,229,255,.12);white-space:nowrap;}
 .refresh-btn{background:rgba(0,229,255,.12);}
 .day-btn.active{background:rgba(0,229,255,.24);color:#fff;border-color:rgba(0,229,255,.55);}
@@ -2145,7 +2145,7 @@ html.mobile .topbar{height:auto;min-height:48px;flex:0 0 auto;flex-wrap:wrap;gap
 html.mobile .brand{order:2;width:auto;justify-content:flex-start;gap:6px;flex:0 0 auto;}
 html.mobile .brand-code{font-size:11px;letter-spacing:.10em}
 html.mobile .topbar-title{order:1;flex:0 0 100%;width:100%;text-align:center;font-size:18px;letter-spacing:.08em;}
-html.mobile .top-actions{order:3;flex:1;justify-content:flex-end;gap:6px;flex-wrap:nowrap;min-width:0;}
+html.mobile .top-actions{order:3;flex:0 0 auto;justify-content:flex-end;gap:6px;flex-wrap:nowrap;min-width:0;}
 html.mobile .sound-btn,html.mobile .refresh-btn,html.mobile .day-btn{font-size:12px;padding:5px 8px;min-width:0;justify-content:center}
 html.mobile .sound-btn span{display:none}
 html.mobile .refresh-btn{min-width:auto}
