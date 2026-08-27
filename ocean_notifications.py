@@ -127,10 +127,20 @@ def group_matches(group, snapshot, previous_snapshot=None):
 
 
 def render_message(template, snapshot):
+    aliases = {
+        "潮汐状态": "tide.phase_text",
+        "潮段进度": "tide.progress",
+        "当前潮高": "tide.level_cm",
+        "风向": "wind.direction",
+        "风级": "wind.level",
+        "风速": "wind.speed_kmh",
+        "近海浪高": "wave.height_m",
+    }
     def replace(match):
-        value = dotted_get(snapshot, match.group(1))
+        path = aliases.get(match.group(1), match.group(1))
+        value = dotted_get(snapshot, path)
         return "--" if value is None else str(value)
-    return re.sub(r"\{([a-zA-Z0-9_.]+)\}", replace, str(template or ""))
+    return re.sub(r"\{([^{}]+)\}", replace, str(template or ""))
 
 
 class NotificationManager:
