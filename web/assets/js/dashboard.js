@@ -1,6 +1,37 @@
 // Polyfills for Android 4.4.2 (Chrome 30)
 if (!String.prototype.includes) { String.prototype.includes = function(s) { return this.indexOf(s) >= 0; }; }
 if (!String.prototype.padStart) { String.prototype.padStart = function(len, ch) { var s = String(this); while (s.length < len) s = (ch || "0") + s; return s; }; }
+var performancePreference="auto";
+function hardwareNeedsLiteMode(){
+  var cores=Number(navigator.hardwareConcurrency||0),memory=Number(navigator.deviceMemory||0),connection=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+  return (cores>0&&cores<=4)||(memory>0&&memory<=4)||(connection&&connection.saveData===true)||(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+function isLitePerformance(){return document.documentElement.classList.contains("performance-lite");}
+function updatePerformanceButton(){
+  var btn=document.getElementById("performanceBtn"),lite=isLitePerformance();if(!btn)return;
+  btn.classList.toggle("is-lite",lite);btn.setAttribute("aria-pressed",lite?"true":"false");
+  btn.textContent=performancePreference==="auto"?(lite?"⚡ 自动·流畅":"⚡ 性能自动"):(performancePreference==="lite"?"⚡ 流畅模式":"⚡ 标准模式");
+  btn.title="自动模式会根据 CPU、内存和省流量设置选择；点击可手动切换";
+}
+function applyPerformanceMode(mode,persist){
+  performancePreference=(mode==="lite"||mode==="standard")?mode:"auto";
+  var lite=performancePreference==="lite"||(performancePreference==="auto"&&hardwareNeedsLiteMode());
+  document.documentElement.classList.toggle("performance-lite",lite);
+  if(persist){try{localStorage.setItem("oceanPerformanceMode",performancePreference);}catch(e){}}
+  updatePerformanceButton();
+}
+function cyclePerformanceMode(){
+  var next=performancePreference==="auto"?"standard":(performancePreference==="standard"?"lite":"auto");
+  applyPerformanceMode(next,true);
+  if(tideChart){tideChart.dispose();tideChart=null;if(lastChartRaw)renderChart(lastChartRaw,"",lastChartSite);}
+}
+function runWhenVisible(fn){return function(){if(!document.hidden)fn();};}
+(function initPerformanceMode(){
+  var query=(location.search.match(/[?&]performance=(auto|lite|standard)(?:&|$)/)||[])[1],saved="";
+  try{saved=localStorage.getItem("oceanPerformanceMode")||"";}catch(e){}
+  applyPerformanceMode(query||saved||"auto",false);
+  document.addEventListener("visibilitychange",function(){document.documentElement.classList.toggle("page-paused",document.hidden);if(!document.hidden)updateClock();});
+})();
 var tideRawData=null, tideChart=null, lastChartRaw=null, lastChartSite=null, lastChartPoints=[], lastTideList=[], resizeTimer=null, lastTideRising=null, soundEnabled=false, audioCtx=null, selectedDayOffset=0, tomorrowTideList=[], tomorrowTideReady=false;
 var $=function(id){return document.getElementById(id);};
 function setText(id,text){var el=$(id); if(el) el.textContent=(text===null||text===undefined||text==="")?"--":text;}
@@ -472,7 +503,7 @@ function parseChartPoints(rawArr){
 }
 function adaptiveChartFont(base,min,max){var scale=Math.min(window.innerWidth/1280,window.innerHeight/760);return Math.max(min,Math.min(max,Math.round(base*scale*1.4)));}
 function initChart(){
-  if(typeof echarts==="undefined")return false; if(!tideChart){tideChart=echarts.init($("tideChart")); window.addEventListener("resize",function(){tideChart.resize();clearTimeout(resizeTimer);resizeTimer=setTimeout(function(){if(lastChartRaw)renderChart(lastChartRaw,"",lastChartSite);},160);});}
+  if(typeof echarts==="undefined")return false; if(!tideChart){tideChart=echarts.init($("tideChart"),null,{devicePixelRatio:isLitePerformance()?1:Math.min(window.devicePixelRatio||1,2)}); window.addEventListener("resize",function(){clearTimeout(resizeTimer);resizeTimer=setTimeout(function(){if(tideChart)tideChart.resize();},180);},{passive:true});}
   return true;
 }
 function renderChart(rawArr,msg,site){
@@ -486,14 +517,16 @@ function renderChart(rawArr,msg,site){
   var maxVal=Math.max.apply(null,points.map(function(p){return p.value;}));
   var isMobileView=document.documentElement.classList.contains("mobile");
   var gridLeft=isMobileView?30:52, gridRight=isMobileView?30:52, gridTop=isMobileView?36:48, gridBottom=isMobileView?32:40;
-  var markData=points.filter(function(p){return p.pointType==="extrema";}).map(function(p){var isHigh=p.extremaType==="满潮";return {name:p.extremaType,coord:[p.label,p.value],value:p.value,labelText:p.extremaType+" "+p.label+"\n"+p.value+"cm",itemStyle:{color:isHigh?"#ff5252":"#00e676",shadowBlur:12,shadowColor:isHigh?"rgba(255,82,82,.6)":"rgba(0,230,118,.6)"},label:{formatter:function(params){return params.data.labelText;},color:isHigh?"#ff5252":"#00e676",fontSize:markFont,fontWeight:"bold",lineHeight:markFont+1,position:"right",distance:4,offset:[0,-14],textShadowColor:"rgba(0,0,0,.85)",textShadowBlur:6,textShadowOffsetX:0,textShadowOffsetY:1}};});
+  var litePerformance=isLitePerformance();
+  var markData=points.filter(function(p){return p.pointType==="extrema";}).map(function(p){var isHigh=p.extremaType==="满潮";return {name:p.extremaType,coord:[p.label,p.value],value:p.value,labelText:p.extremaType+" "+p.label+"\n"+p.value+"cm",itemStyle:{color:isHigh?"#ff5252":"#00e676",shadowBlur:litePerformance?0:8,shadowColor:isHigh?"rgba(255,82,82,.6)":"rgba(0,230,118,.6)"},label:{formatter:function(params){return params.data.labelText;},color:isHigh?"#ff5252":"#00e676",fontSize:markFont,fontWeight:"bold",lineHeight:markFont+1,position:"right",distance:4,offset:[0,-14],textShadowColor:"rgba(0,0,0,.85)",textShadowBlur:litePerformance?0:4,textShadowOffsetX:0,textShadowOffsetY:1}};});
   tideChart.setOption({
+    animation:!litePerformance,
     backgroundColor:"transparent",
     tooltip:{trigger:"axis",formatter:function(p){return "时间："+p[0].axisValue+"<br>潮高："+p[0].value+" cm";},backgroundColor:"rgba(15,21,40,.94)",borderColor:"rgba(0,229,255,.35)",textStyle:{color:"#e8eaf6",fontSize:axisFont}},
     grid:{left:gridLeft,right:gridRight,top:gridTop,bottom:gridBottom,containLabel:true},
     xAxis:{type:"category",data:points.map(function(p){return p.label;}),axisLabel:{rotate:0,interval:2,fontSize:axisFont,margin:6,color:"rgba(232,234,246,.75)",textShadowColor:"rgba(0,0,0,.7)",textShadowBlur:4,textShadowOffsetX:0,textShadowOffsetY:1},axisLine:{lineStyle:{color:"rgba(0,229,255,.28)"}},axisTick:{lineStyle:{color:"rgba(0,229,255,.22)"}}},
     yAxis:{name:"潮高(cm)",type:"value",max:Math.ceil((maxVal+35)/50)*50,nameTextStyle:{fontSize:nameFont,color:"rgba(232,234,246,.75)",textShadowColor:"rgba(0,0,0,.7)",textShadowBlur:4,textShadowOffsetX:0,textShadowOffsetY:1},axisLabel:{fontSize:axisFont,color:"rgba(232,234,246,.75)",textShadowColor:"rgba(0,0,0,.7)",textShadowBlur:4,textShadowOffsetX:0,textShadowOffsetY:1},axisLine:{lineStyle:{color:"rgba(0,229,255,.28)"}},splitLine:{lineStyle:{color:"rgba(255,255,255,.07)"}}},
-    series:[{name:"潮高",type:"line",data:points.map(function(p){return p.value;}),smooth:true,symbolSize:6,itemStyle:{color:"#00e5ff",shadowBlur:10,shadowColor:"rgba(0,229,255,.5)"},lineStyle:{color:"#00e5ff",width:3,shadowBlur:14,shadowColor:"rgba(0,229,255,.55)"},areaStyle:{color:{type:"linear",colorStops:[{offset:0,color:"rgba(0,229,255,.28)"},{offset:1,color:"rgba(0,229,255,.03)"}]}},markPoint:{symbol:"circle",symbolSize:24,data:markData},markLine:{symbol:"none",silent:true,data:[],lineStyle:{color:"#ffab00",width:2,type:"solid",shadowBlur:10,shadowColor:"rgba(255,171,0,.6)"},label:{show:true,formatter:"现在",color:"#ffab00",fontSize:markFont,fontWeight:"bold",position:"end",distance:[4,0],backgroundColor:"rgba(6,10,20,.85)",padding:[3,8,3,8],borderRadius:3,textShadowColor:"rgba(0,0,0,.85)",textShadowBlur:6,textShadowOffsetX:0,textShadowOffsetY:1}}}]
+    series:[{name:"潮高",type:"line",data:points.map(function(p){return p.value;}),smooth:!litePerformance,symbolSize:litePerformance?4:6,itemStyle:{color:"#00e5ff",shadowBlur:litePerformance?0:8,shadowColor:"rgba(0,229,255,.5)"},lineStyle:{color:"#00e5ff",width:3,shadowBlur:litePerformance?0:10,shadowColor:"rgba(0,229,255,.55)"},areaStyle:{color:{type:"linear",colorStops:[{offset:0,color:"rgba(0,229,255,.28)"},{offset:1,color:"rgba(0,229,255,.03)"}]}},markPoint:{symbol:"circle",symbolSize:litePerformance?18:24,data:markData},markLine:{symbol:"none",silent:true,data:[],lineStyle:{color:"#ffab00",width:2,type:"solid",shadowBlur:litePerformance?0:8,shadowColor:"rgba(255,171,0,.6)"},label:{show:true,formatter:"现在",color:"#ffab00",fontSize:markFont,fontWeight:"bold",position:"end",distance:[4,0],backgroundColor:"rgba(6,10,20,.85)",padding:[3,8,3,8],borderRadius:3,textShadowColor:"rgba(0,0,0,.85)",textShadowBlur:litePerformance?0:4,textShadowOffsetX:0,textShadowOffsetY:1}}}]
   },true);
   // 启动当前时间标线更新（明日模式下不显示）
   if(selectedDayOffset===0){
@@ -919,11 +952,11 @@ function boot(){
   // Android 平板（无 Mobile 标记）通过屏幕尺寸辅助判断
   if(!isMobile&&/Android/i.test(ua)){isMobile=Math.max(screen.width,screen.height)<1080;}
   if(isMobile){document.documentElement.className+=" mobile";}
-  updateClock(); setInterval(updateClock,1000);
+  updatePerformanceButton();updateClock(); setInterval(runWhenVisible(updateClock),1000);
   updateDayButtons();
   loadTide(); loadChart(); loadWeather(); loadWave(); loadOffshoreWave(); loadCmaAlarm(); loadSdAlarm();
-  setInterval(loadTide,60*60*1000); setInterval(loadChart,6*60*60*1000); setInterval(loadWeather,10*60*1000); setInterval(loadWave,60*60*1000); setInterval(loadOffshoreWave,60*60*1000); setInterval(loadCmaAlarm,5*60*1000); setInterval(loadSdAlarm,5*60*1000);
-  setInterval(function(){if(lastTideList.length)calcTideStatus(lastTideList);},60*1000);
+  setInterval(runWhenVisible(loadTide),60*60*1000); setInterval(runWhenVisible(loadChart),6*60*60*1000); setInterval(runWhenVisible(loadWeather),10*60*1000); setInterval(runWhenVisible(loadWave),60*60*1000); setInterval(runWhenVisible(loadOffshoreWave),60*60*1000); setInterval(runWhenVisible(loadCmaAlarm),5*60*1000); setInterval(runWhenVisible(loadSdAlarm),5*60*1000);
+  setInterval(runWhenVisible(function(){if(lastTideList.length)calcTideStatus(lastTideList);}),60*1000);
   setTimeout(function(){if(lastChartRaw)renderChart(lastChartRaw,"",lastChartSite);},1000);
 }
 boot();
