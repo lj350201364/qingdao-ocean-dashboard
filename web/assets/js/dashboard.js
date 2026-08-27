@@ -497,7 +497,7 @@ function parseChartPoints(rawArr){
   // 如果最后一个点不足23:59，补充一个23:59的点，使X轴延伸到全天结束
   if(points.length>0&&points[points.length-1].minute<1439){
     var last=points[points.length-1];
-    points.push({dateKey:last.dateKey,label:"23:59",minute:1439,value:last.value,pointType:last.pointType,extremaType:""});
+    points.push({dateKey:last.dateKey,label:"23:59",minute:1439,value:last.value,pointType:"hour",extremaType:""});
   }
   return points;
 }
