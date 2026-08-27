@@ -5,6 +5,11 @@
     "dry_run": true,
     "interval_seconds": 60,
     "max_data_age_minutes": 15,
+    "notification_schedule": {
+      "enabled": false,
+      "start": "08:00",
+      "end": "18:00"
+    },
     "default_webhook_env": "DINGTALK_WEBHOOK_URL",
     "default_secret_env": "DINGTALK_SECRET",
     "message_prefix": "海况通知",

@@ -20,6 +20,32 @@ def now_cn():
     return datetime.datetime.now(SHANGHAI_TZ)
 
 
+def normalize_clock(value, default):
+    text = str(value or default).strip()
+    match = re.fullmatch(r"([01]\d|2[0-3]):([0-5]\d)", text)
+    if not match:
+        raise ValueError(f"时间格式不正确：{text}，请使用 HH:MM")
+    return f"{match.group(1)}:{match.group(2)}"
+
+
+def notification_window_status(settings, current=None):
+    schedule = settings.get("notification_schedule") or {}
+    enabled = schedule.get("enabled") is True
+    start = normalize_clock(schedule.get("start"), "08:00")
+    end = normalize_clock(schedule.get("end"), "18:00")
+    current = current or now_cn()
+    minute = current.hour * 60 + current.minute
+    start_minute = int(start[:2]) * 60 + int(start[3:])
+    end_minute = int(end[:2]) * 60 + int(end[3:])
+    if not enabled or start_minute == end_minute:
+        active = True
+    elif start_minute < end_minute:
+        active = start_minute <= minute < end_minute
+    else:
+        active = minute >= start_minute or minute < end_minute
+    return {"enabled": enabled, "start": start, "end": end, "active": active}
+
+
 def dotted_get(data, path):
     current = data
     for part in str(path).split("."):
@@ -191,6 +217,12 @@ class NotificationManager:
         if len({rule["id"] for rule in rules}) != len(rules):
             raise ValueError("规则 ID 不能重复")
         incoming["settings"]["interval_seconds"] = max(30, int(incoming["settings"].get("interval_seconds", 60)))
+        schedule = incoming["settings"].get("notification_schedule") or {}
+        incoming["settings"]["notification_schedule"] = {
+            "enabled": schedule.get("enabled") is True,
+            "start": normalize_clock(schedule.get("start"), "08:00"),
+            "end": normalize_clock(schedule.get("end"), "18:00"),
+        }
         temp_path = self.config_path + ".tmp"
         with open(temp_path, "w", encoding="utf-8") as handle:
             json.dump(incoming, handle, ensure_ascii=False, indent=2)
@@ -273,6 +305,13 @@ class NotificationManager:
             settings = config.get("settings") or {}
             if not settings.get("enabled", True):
                 return {"skipped": "disabled"}
+            window = notification_window_status(settings)
+            if not window["active"]:
+                self.last_run = now_cn().isoformat(timespec="seconds")
+                self.last_error = ""
+                self.match_since.clear()
+                self.previous_snapshot = None
+                return {"skipped": "outside_notification_hours", "notification_schedule": window}
             active_rules = [rule for rule in (config.get("rules") or []) if rule.get("enabled")]
             if not active_rules:
                 self.last_run = now_cn().isoformat(timespec="seconds")
@@ -407,8 +446,12 @@ class NotificationManager:
 
     def public_config(self):
         config = self.load_config()
+        settings = config.get("settings") or {}
+        settings["default_webhook_configured"] = bool(self._secret(settings.get("default_webhook_env", "DINGTALK_WEBHOOK_URL")))
+        settings["default_secret_configured"] = bool(self._secret(settings.get("default_secret_env", "DINGTALK_SECRET")))
         for role in (config.get("roles") or {}).values():
-            settings = config.get("settings") or {}
+            role["role_webhook_configured"] = bool(self._secret(role.get("webhook_env", "")))
+            role["role_secret_configured"] = bool(self._secret(role.get("secret_env", "")))
             role["webhook_configured"] = bool(self._secret(role.get("webhook_env", "")) or self._secret(settings.get("default_webhook_env", "DINGTALK_WEBHOOK_URL")))
             role["secret_configured"] = bool(self._secret(role.get("secret_env", "")) or self._secret(settings.get("default_secret_env", "DINGTALK_SECRET")))
             role["mobiles_configured"] = bool(self._secret(role.get("mention_mobiles_env", "")))
@@ -430,9 +473,14 @@ class NotificationManager:
         return {"role": role_id, "message": "测试消息已提交"}
 
     def status(self):
+        try:
+            schedule = notification_window_status((self.load_config().get("settings") or {}))
+        except Exception:
+            schedule = {"enabled": False, "start": "08:00", "end": "18:00", "active": True}
         return {
             "running": bool(self.thread and self.thread.is_alive()),
             "last_run": self.last_run,
             "last_error": self.last_error,
             "last_snapshot": self.last_snapshot,
+            "notification_schedule": schedule,
         }
