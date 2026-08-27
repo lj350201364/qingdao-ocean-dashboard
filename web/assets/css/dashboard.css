@@ -586,22 +586,22 @@ body::before{content:"";position:fixed;inset:0;z-index:1000;pointer-events:none;
 body{animation:none}
 body::before{display:none}
 .topbar{backdrop-filter:none}
-.topbar::after,.topbar-title,.corner,.module-title::before,.time-big,.weather-data-value,.weather-data-text,.ocean-cell strong,.extra-box .value,.data-value,.weather-cell:nth-child(2)::before,.weather-cell:nth-child(2)::after,.weather-cell:nth-child(2) .wind-text-big,#currentLevel,#tideProgress,#tideChart,.map-shell::before,tr{animation:none!important}
+.topbar::after,.topbar-title,.corner,.module-title::before,.time-big,.weather-data-value,.weather-data-text,.ocean-cell strong,.extra-box .value,.data-value,.weather-cell:nth-child(2) .wind-text-big,#currentLevel,#tideProgress,#tideChart,.map-shell::before,tr{animation:none!important}
 .card{contain:paint style;animation:techBootIn .38s cubic-bezier(.16,1,.3,1) both}
 .quad-tr .card{animation-delay:.04s}.quad-bl .card{animation-delay:.08s}.quad-br .card{animation-delay:.12s}.quad-tl .weather-card{animation-delay:.03s}
 .card::after,#tideChart::before{display:none}
-.corner,.brand-icon,.topbar-title,.weather-cell:nth-child(2)::before{filter:none}
+.corner,.brand-icon,.topbar-title{filter:none}
 .typhoon-frame{-webkit-filter:none;filter:none}
 .map-actions{backdrop-filter:none}
 .performance-btn{display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:6px 10px;border:1px solid transparent;background:transparent;color:var(--tech-muted);border-radius:6px;font-size:var(--fs-label);cursor:pointer;white-space:nowrap;transition:color .16s ease,background .16s ease,border-color .16s ease}
 .performance-btn:hover{color:var(--tech-text);background:rgba(25,217,255,.09);border-color:rgba(25,217,255,.24)}
 .performance-btn.is-lite{color:#00151d;background:linear-gradient(135deg,#a2f3ff,var(--tech-cyan));border-color:#80edff}
 
-html.performance-lite .card,html.performance-lite .weather-cell,html.performance-lite .ocean-cell,html.performance-lite .extra-box,html.performance-lite .tide-water-bg .wave-layer,html.performance-lite .tide-water-bg::before,html.performance-lite .rising-bg::before,html.performance-lite .falling-bg::before,html.performance-lite .alarm-bar-label::before,html.performance-lite .sd-alarm-bar-label::before,html.performance-lite .cma-alarm-bar-label::before,html.performance-lite .weather-icon *{animation:none!important;transition:none!important}
+html.performance-lite .card,html.performance-lite .weather-cell,html.performance-lite .ocean-cell,html.performance-lite .extra-box,html.performance-lite .alarm-bar-label::before,html.performance-lite .sd-alarm-bar-label::before,html.performance-lite .cma-alarm-bar-label::before,html.performance-lite .weather-icon *{animation:none!important;transition:none!important}
 html.performance-lite .cma-alarm-marquee-inner,html.performance-lite .sd-alarm-marquee-inner,html.performance-lite .alarm-marquee-inner{animation:marqueeScroll 120s linear infinite!important}
 html.performance-lite .card{box-shadow:0 8px 20px rgba(0,0,0,.25);contain:paint style}
 html.performance-lite .map-shell,html.performance-lite #tideChart{box-shadow:inset 0 0 18px rgba(0,0,0,.28)}
-html.performance-lite .weather-cell:nth-child(2)::before,html.performance-lite .weather-cell:nth-child(2)::after,html.performance-lite .content::before{display:none}
+html.performance-lite .content::before{display:none}
 html.performance-lite .alarm-modal-mask{backdrop-filter:none}
 html.page-paused *,html.page-paused *::before,html.page-paused *::after{animation-play-state:paused!important}
 html.mobile .performance-btn{display:none}
