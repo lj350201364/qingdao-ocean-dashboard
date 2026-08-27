@@ -10,6 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY OceanWindow_optimized.py ocean_notifications.py notification_config.json ./
+COPY web ./web
 
 RUN mkdir -p /data && useradd --create-home --uid 10001 ocean && chown -R ocean:ocean /app /data
 

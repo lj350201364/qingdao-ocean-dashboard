@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>栈桥浴场实时展示大屏</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@4.9.0/dist/echarts.min.js"></script>
+<link rel="stylesheet" href="/assets/css/dashboard.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true">
+        <svg viewBox="0 0 800 800" width="48" height="48" xmlns="http://www.w3.org/2000/svg">
+          <g transform="translate(190,613.84) scale(0.0525,-0.0525)" fill="currentColor">
+            <path d="M3766 6648 c-8 -13 -18 -41 -22 -63 -4 -22 -17 -58 -30 -80 -34 -60 -82 -370 -68 -441 5 -28 1 -35 -38 -66 -81 -66 -198 -139 -341 -213 -198 -103 -357 -169 -632 -263 -172 -60 -369 -136 -490 -191 -22 -10 -115 -48 -208 -85 -166 -67 -174 -69 -772 -215 -142 -35 -224 -83 -251 -148 -16 -37 -18 -140 -4 -177 17 -44 175 -250 225 -293 27 -23 72 -53 101 -67 52 -26 283 -106 363 -126 l44 -12 -7 -66 c-24 -232 -43 -342 -63 -364 -11 -13 -26 -33 -32 -46 -19 -36 -252 -146 -436 -205 -159 -51 -386 -109 -579 -147 -87 -17 -175 -38 -194 -46 -57 -24 -103 -64 -123 -108 -37 -81 -16 -149 81 -263 107 -125 253 -206 501 -279 l129 -37 0 -301 c0 -166 -4 -306 -8 -312 -21 -32 -154 -35 -288 -5 -134 30 -524 90 -586 91 l-38 0 0 -84 c0 -47 5 -88 10 -91 6 -4 52 -11 103 -17 149 -17 195 -27 201 -46 9 -29 10 -91 2 -99 -9 -9 -7 -9 -183 -11 l-133 -2 0 -147 0 -146 383 6 c210 4 618 12 907 18 672 15 774 16 2415 6 923 -5 1555 -4 1935 4 403 7 690 8 1000 0 239 -6 643 -13 898 -17 l462 -6 0 141 0 141 -307 0 c-170 0 -332 3 -360 6 -50 6 -53 8 -53 35 0 25 4 29 28 29 70 0 593 21 640 26 l52 5 0 60 c0 58 -1 59 -27 59 -16 0 -171 -5 -345 -10 -289 -10 -320 -9 -349 6 -43 22 -97 20 -269 -10 -80 -14 -191 -28 -247 -32 l-102 -7 -12 26 c-9 21 -9 68 -1 209 7 101 12 224 13 273 0 50 4 110 7 135 l7 45 90 13 c340 48 391 77 529 292 118 182 132 263 61 334 -45 45 -112 66 -387 121 -135 27 -278 63 -355 89 -232 78 -673 261 -678 280 -4 16 -35 357 -35 383 0 18 7 23 38 28 76 11 220 48 297 78 173 65 235 133 330 362 102 246 116 320 72 386 -39 60 -92 77 -283 94 -360 32 -521 71 -919 225 -88 34 -176 68 -195 75 -19 7 -147 61 -285 120 -137 59 -315 129 -395 157 -143 48 -563 249 -603 288 -16 14 -21 54 -38 256 -16 207 -22 246 -43 289 -13 27 -27 73 -31 100 -4 28 -12 56 -17 63 -16 19 -46 14 -62 -10z"/>
+          </g>
+        </svg>
+      </span>
+    </div>
+    <div class="topbar-title">栈桥浴场 · 实时监测大屏</div>
+    <div class="top-actions">
+      <button id="todayBtn" class="day-btn active" type="button" aria-pressed="true" onclick="switchForecastDay(0)">今日</button>
+      <button id="tomorrowBtn" class="day-btn" type="button" aria-pressed="false" onclick="switchForecastDay(1)">明日</button>
+      <button id="refreshBtn" class="refresh-btn" type="button" aria-label="刷新全部数据" onclick="refreshAllData()">↻ 刷新</button>
+      <button id="soundBtn" class="sound-btn" type="button" aria-label="切换提示音" aria-pressed="false" onclick="toggleSound()">🔇 <span>声音关</span></button>
+    </div>
+  </header>
+
+  <div class="cma-alarm-bar" id="cmaAlarmBar">
+    <div class="cma-alarm-bar-label">气象预警</div>
+    <span class="cma-alarm-bar-time" id="cmaAlarmTime">更新 --</span>
+    <div class="cma-alarm-marquee">
+      <div class="cma-alarm-marquee-inner" id="cmaAlarmMarquee">
+        <span class="cma-alarm-item">暂无预警信息</span>
+      </div>
+    </div>
+  </div>
+
+  <main class="content">
+    <section class="quad-grid">
+      <!-- 左上：时间 + 天气 -->
+      <div class="quad quad-tl">
+        <div class="card time-card">
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <div class="time-display">
+            <div class="time-main">
+              <span id="nowTimeBig" class="time-big">--:--:--</span>
+            </div>
+            <div class="time-sub">
+              <span id="dateTextBig" class="date-big">--</span>
+              <span id="lunarTextBig" class="lunar-big">农历 --</span>
+            </div>
+          </div>
+        </div>
+        <div class="card weather-card" id="weatherCard">
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <div class="module-title"><span>实时天气与风况</span><small id="weatherTime">--</small></div>
+          <div class="weather-grid">
+            <div class="weather-cell">
+              <div class="weather-cell-inner">
+                <div id="weatherIcon" class="weather-icon cloudy"></div>
+                <div id="weatherText" class="weather-data-text">--</div>
+              </div>
+              <div class="label">天气状况</div>
+            </div>
+            <div class="weather-cell">
+              <div class="weather-cell-inner">
+                <div id="windDirection" class="wind-text wind-text-big">--</div>
+              </div>
+              <div class="label">风向风级</div>
+            </div>
+            <div class="weather-cell">
+              <div class="weather-cell-inner">
+                <div id="tempRange" class="weather-data-value">--</div>
+              </div>
+              <div class="label">今日温度</div>
+            </div>
+            <div class="weather-cell">
+              <div class="weather-cell-inner">
+                <div id="humidity" class="weather-data-value">--</div>
+              </div>
+              <div class="label">湿度</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右上：台风图 -->
+      <div class="quad quad-tr">
+        <div class="card map-card">
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <div class="module-title"><span>台风路径与云图</span><small>北海预报减灾中心</small></div>
+          <div class="map-shell">
+            <iframe id="typhoonFrame" class="typhoon-frame" title="台风路径与云图" loading="eager" src="https://www.bhyb.org.cn/typhoon/"></iframe>
+            <span class="map-label n40">40°N</span>
+            <span class="map-label n30">30°N</span>
+            <span class="map-label n20">20°N</span>
+            <span class="map-label e125">125°E</span>
+            <span class="map-label e130">130°E</span>
+            <span class="map-label e135">135°E</span>
+            <a class="mobile-map-open" href="https://www.bhyb.org.cn/typhoon/" target="_blank" rel="noopener">手机端打开台风图</a>
+            <div class="map-actions">
+              <button class="btn" onclick="reloadTyphoonFrame()">刷新图层</button>
+              <a class="btn" href="https://www.bhyb.org.cn/typhoon/" target="_blank">浏览器打开</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 左下：海况数据 -->
+      <div class="quad quad-bl">
+        <div class="card tide-card" id="tideCard">
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <div class="module-title"><span>海况数据</span><small id="tideUpdate">--</small></div>
+          <div class="ocean-data-grid">
+            <div class="ocean-row ocean-row-top">
+              <div class="ocean-cell"><div class="label">近海浪高</div><strong id="offshoreWaveHeight" class="data-value">--</strong></div>
+              <div class="ocean-cell"><div class="label">浴场水温</div><strong id="beachWaterTemp" class="data-value">--</strong></div>
+            </div>
+            <div class="ocean-row">
+              <div class="ocean-cell tide-status-cell">
+                <div class="tide-status-bg rising-bg"></div>
+                <div class="tide-status-bg falling-bg"></div>
+                <strong id="tideBadge" class="status-badge">等待加载</strong>
+              </div>
+              <div class="ocean-cell cell-orange"><div class="label">当前潮高</div><strong id="currentLevel" class="data-value">--<small>cm</small></strong></div>
+              <div class="ocean-cell tide-progress-cell cell-orange">
+                <div class="tide-water-bg" id="tideWaterBg">
+                  <div class="wave-layer wave-1"></div>
+                  <div class="wave-layer wave-2"></div>
+                  <div class="wave-layer wave-3"></div>
+                </div>
+                <div class="label">潮段进度</div>
+                <strong id="tideProgress" class="data-value">--</strong>
+              </div>
+            </div>
+            <div class="ocean-row row-high-tide">
+              <div class="ocean-cell"><div class="label">下次满潮时间</div><strong id="nextHigh" class="data-value">--</strong></div>
+              <div class="ocean-cell"><div class="label">下次满潮潮高</div><strong id="nextHighLevel" class="data-value">--<small>cm</small></strong></div>
+              <div class="ocean-cell"><div class="label">距下次满潮</div><strong id="highDelta" class="data-value">--</strong></div>
+            </div>
+            <div class="ocean-row row-low-tide">
+              <div class="ocean-cell"><div class="label">下次低潮时间</div><strong id="nextLow" class="data-value">--</strong></div>
+              <div class="ocean-cell"><div class="label">下次低潮潮高</div><strong id="nextLowLevel" class="data-value">--<small>cm</small></strong></div>
+              <div class="ocean-cell"><div class="label">距下次低潮</div><strong id="lowDelta" class="data-value">--</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右下：潮汐曲线图 -->
+      <div class="quad quad-br">
+        <div class="card chart-card" id="chartCard">
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <div class="module-title"><span id="chartTitle">青岛今日潮汐曲线</span><small id="chartSource">全球潮汐平台</small><small id="chartTime" class="update-time">--</small></div>
+          <div id="tideChart">等待曲线数据</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="alarmModal" class="alarm-modal" style="display:none;">
+  <div class="alarm-modal-mask" onclick="closeAlarmModal()"></div>
+  <div class="alarm-modal-box">
+    <div class="alarm-modal-header">
+      <span class="alarm-modal-title" id="alarmModalTitle">预警详情</span>
+      <button class="alarm-modal-close" onclick="closeAlarmModal()">✕</button>
+    </div>
+    <div class="alarm-modal-body" id="alarmModalBody">
+      <div class="alarm-modal-loading">加载中...</div>
+    </div>
+    <div class="alarm-modal-footer">
+      <span id="alarmModalTime" class="alarm-modal-time">--</span>
+      <a id="alarmModalLink" href="#" target="_blank" rel="noopener noreferrer" class="alarm-modal-link" onclick="event.stopPropagation();">查看原文</a>
+    </div>
+  </div>
+</div>
+
+<script src="/assets/js/dashboard.js" defer></script>
+</body>
+</html>
