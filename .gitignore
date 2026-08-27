@@ -1,0 +1,5 @@
+.env
+notification_secrets.json
+ocean_notifications.db
+__pycache__/
+*.pyc

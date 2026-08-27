@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "settings": {
+    "enabled": true,
+    "dry_run": true,
+    "interval_seconds": 60,
+    "max_data_age_minutes": 15,
+    "default_webhook_env": "DINGTALK_WEBHOOK_URL",
+    "default_secret_env": "DINGTALK_SECRET",
+    "message_prefix": "海况通知",
+    "shore_inward_degree": null,
+    "site_name": "栈桥浴场"
+  },
+  "roles": {
+    "cleaning": {
+      "name": "保洁",
+      "webhook_env": "DINGTALK_CLEANING_WEBHOOK",
+      "secret_env": "DINGTALK_CLEANING_SECRET",
+      "mention_mobiles_env": "DINGTALK_CLEANING_MOBILES"
+    },
+    "lifeguard": {
+      "name": "救生员",
+      "webhook_env": "DINGTALK_LIFEGUARD_WEBHOOK",
+      "secret_env": "DINGTALK_LIFEGUARD_SECRET",
+      "mention_mobiles_env": "DINGTALK_LIFEGUARD_MOBILES"
+    },
+    "manager": {
+      "name": "管理人员",
+      "webhook_env": "DINGTALK_MANAGER_WEBHOOK",
+      "secret_env": "DINGTALK_MANAGER_SECRET",
+      "mention_mobiles_env": "DINGTALK_MANAGER_MOBILES"
+    },
+    "security": {
+      "name": "保安",
+      "webhook_env": "DINGTALK_SECURITY_WEBHOOK",
+      "secret_env": "DINGTALK_SECURITY_SECRET",
+      "mention_mobiles_env": "DINGTALK_SECURITY_MOBILES"
+    },
+    "broadcaster": {
+      "name": "广播员",
+      "webhook_env": "DINGTALK_BROADCASTER_WEBHOOK",
+      "secret_env": "DINGTALK_BROADCASTER_SECRET",
+      "mention_mobiles_env": "DINGTALK_BROADCASTER_MOBILES"
+    }
+  },
+  "rules": [
+    {
+      "id": "rising_80_cleanup",
+      "name": "涨潮80%岸边保洁窗口",
+      "enabled": false,
+      "conditions": {
+        "all": [
+          {
+            "field": "tide.phase",
+            "operator": "equals",
+            "value": "rising"
+          },
+          {
+            "field": "tide.progress",
+            "operator": "gte",
+            "value": 80
+          },
+          {
+            "field": "wave.height_m",
+            "operator": "lte",
+            "value": 0.8
+          },
+          {
+            "field": "wind.relation",
+            "operator": "in",
+            "value": [
+              "onshore",
+              "cross_onshore"
+            ]
+          }
+        ]
+      },
+      "stable_for_minutes": 5,
+      "roles": [
+        "cleaning",
+        "security"
+      ],
+      "priority": "normal",
+      "deduplication": "per_tide_segment",
+      "message": "涨潮进度已达到 {tide.progress}%，当前潮高 {tide.level_cm} cm，风向风级 {wind.direction} {wind.level}，近海浪高 {wave.height_m} m。当前环境满足岸边漂浮垃圾清理条件，请结合现场安全情况安排作业。"
+    },
+    {
+      "id": "high_wave_safety_broadcast",
+      "name": "较大浪高安全广播",
+      "enabled": false,
+      "conditions": {
+        "all": [
+          {
+            "field": "wave.height_m",
+            "operator": "gte",
+            "value": 1.5
+          }
+        ]
+      },
+      "stable_for_minutes": 3,
+      "roles": [
+        "lifeguard",
+        "manager",
+        "security",
+        "broadcaster"
+      ],
+      "priority": "high",
+      "deduplication": "per_tide_segment",
+      "message": "近海浪高达到 {wave.height_m} m，当前为{tide.phase_text}，潮段进度 {tide.progress}%，风向风级 {wind.direction} {wind.level}。请加强岸线巡查，广播员根据现场情况播放安全提示。"
+    },
+    {
+      "id": "strong_onshore_rising_watch",
+      "name": "涨潮叠加较强向岸风巡查",
+      "enabled": false,
+      "conditions": {
+        "all": [
+          {
+            "field": "tide.phase",
+            "operator": "equals",
+            "value": "rising"
+          },
+          {
+            "field": "tide.progress",
+            "operator": "gte",
+            "value": 60
+          },
+          {
+            "field": "wind.relation",
+            "operator": "in",
+            "value": [
+              "onshore",
+              "cross_onshore"
+            ]
+          },
+          {
+            "field": "wind.speed_kmh",
+            "operator": "gte",
+            "value": 29
+          },
+          {
+            "field": "tide.progress",
+            "operator": "gte",
+            "value": 80
+          }
+        ]
+      },
+      "stable_for_minutes": 5,
+      "roles": [
+        "lifeguard",
+        "security",
+        "broadcaster"
+      ],
+      "priority": "high",
+      "deduplication": "per_tide_segment",
+      "message": "当前涨潮进度 {tide.progress}%，出现较强向岸风：{wind.direction} {wind.level}，风速 {wind.speed_kmh} km/h。请保安与救生员加强岸线巡查，广播员准备安全提醒。"
+    }
+  ]
+}

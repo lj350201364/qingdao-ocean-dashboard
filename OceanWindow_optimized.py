@@ -1,10 +1,12 @@
 import gzip
+import hmac
 import http.cookiejar
 import http.server
 import io
 import json
 import os
 import re
+import shutil
 import socketserver
 import sys
 import threading
@@ -13,6 +15,15 @@ import datetime
 import urllib.error
 import urllib.parse
 import urllib.request
+
+try:
+    from ocean_notifications import NotificationManager, conservative_wave_height, wind_level, wind_relation
+except Exception as notification_import_error:
+    NotificationManager = None
+    conservative_wave_height = None
+    wind_level = None
+    wind_relation = None
+    print("【通知模块加载失败】", repr(notification_import_error))
 
 try:
     import webview
@@ -30,6 +41,17 @@ WEATHER_LATITUDE = 36.061
 WEATHER_LONGITUDE = 120.326
 
 server = None
+notification_manager = None
+notification_cache_lock = threading.RLock()
+notification_data_cache = {
+    "tide_date": None,
+    "tide_days": None,
+    "tide_fetched_at": 0,
+    "weather": None,
+    "weather_fetched_at": 0,
+    "wave": None,
+    "wave_fetched_at": 0,
+}
 
 cache = {
     "tide_table": None,
@@ -463,6 +485,170 @@ def weather_code_text(code):
     return mapping.get(code, "未知天气")
 
 
+def _notification_fetch_weather():
+    params = urllib.parse.urlencode({
+        "latitude": WEATHER_LATITUDE,
+        "longitude": WEATHER_LONGITUDE,
+        "current": "wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+        "timezone": "Asia/Shanghai",
+    })
+    raw = fetch_json(
+        f"https://api.open-meteo.com/v1/forecast?{params}",
+        headers={"User-Agent": "OceanWindow-NotificationEngine/1.0", "Accept": "application/json"},
+        timeout=18,
+    )
+    current = raw.get("current") or {}
+    return {
+        "degree": numeric_or_none(current.get("wind_direction_10m")),
+        "speed_kmh": numeric_or_none(current.get("wind_speed_10m")),
+        "gust_kmh": numeric_or_none(current.get("wind_gusts_10m")),
+        "source_time": current.get("time", "--"),
+    }
+
+
+def _notification_fetch_wave():
+    target = f"http://www.qdmf.org.cn/Ajax/SeaArea24HSumWave.ashx?date={today_ymd()}&_t={timestamp_ms()}"
+    result = fetch_json(target, timeout=18)
+    rows = []
+    if isinstance(result, dict):
+        rows = result.get("rows") or result.get("Rows") or result.get("data") or result.get("Data") or []
+    elif isinstance(result, list):
+        rows = result
+    if isinstance(rows, dict):
+        rows = [rows]
+    row = pick_named_row(rows, ["青岛近海", "青岛近岸", "青岛"])
+    explicit = row.get("SA24HWFQDOFFSHOREWAVEHEIGHT") if isinstance(row, dict) else None
+    raw_value = explicit or extract_wave_from_row(row) or extract_wave_from_row(result if isinstance(result, dict) else {})
+    height = conservative_wave_height(raw_value) if conservative_wave_height else None
+    if height is None:
+        raise ValueError("通知规则无法解析近海浪高")
+    return {"height_m": height, "raw": str(raw_value)}
+
+
+def numeric_or_none(value):
+    if value is None:
+        return None
+    match = re.search(r"-?\d+(?:\.\d+)?", str(value))
+    return float(match.group(0)) if match else None
+
+
+def _notification_tide_snapshot(tide_days):
+    now = _now()
+    now_minute = now.hour * 60 + now.minute
+    extrema = []
+    for offset, data in tide_days.items():
+        for item in data.get("extrema") or []:
+            extrema.append({
+                "minute": int(item.get("minute", 0)) + offset * 1440,
+                "height": numeric_or_none(item.get("height")),
+                "type": item.get("type", "潮位"),
+                "time": item.get("time", "--"),
+                "offset": offset,
+            })
+    extrema = sorted([x for x in extrema if x["height"] is not None], key=lambda x: x["minute"])
+    previous_items = [x for x in extrema if x["minute"] <= now_minute]
+    future_items = [x for x in extrema if x["minute"] > now_minute]
+    if not previous_items or not future_items:
+        raise ValueError("潮汐极值不足，无法计算通知潮段")
+    previous, following = previous_items[-1], future_items[0]
+    total = max(1, following["minute"] - previous["minute"])
+    progress = max(0, min(100, round((now_minute - previous["minute"]) / total * 100)))
+    rising = following["type"] in ("高潮", "满潮") or following["height"] > previous["height"]
+    chart = []
+    for point in (tide_days.get(0) or {}).get("chart") or []:
+        if point.get("POINT_TYPE") != "hour":
+            continue
+        minute = numeric_or_none(point.get("TIDETIME"))
+        height = numeric_or_none(point.get("TIDEHEIGHT"))
+        if minute is not None and height is not None:
+            chart.append({"minute": int(minute * 60), "height": height})
+    chart.sort(key=lambda x: x["minute"])
+    level = None
+    for index in range(1, len(chart)):
+        left, right = chart[index - 1], chart[index]
+        if left["minute"] <= now_minute <= right["minute"]:
+            ratio = (now_minute - left["minute"]) / max(1, right["minute"] - left["minute"])
+            level = round(left["height"] + (right["height"] - left["height"]) * ratio)
+            break
+    date_key = now.strftime("%Y-%m-%d")
+    segment_id = f"{date_key}:{previous['offset']}:{previous['time']}:{following['offset']}:{following['time']}"
+    return {
+        "phase": "rising" if rising else "falling",
+        "phase_text": "涨潮中" if rising else "退潮中",
+        "progress": progress,
+        "level_cm": level,
+        "segment_id": segment_id,
+        "previous_extrema": previous,
+        "next_extrema": following,
+    }
+
+
+def notification_snapshot_provider(config):
+    settings = config.get("settings") or {}
+    now_ts = time.time()
+    today = today_ymd()
+    errors = []
+    with notification_cache_lock:
+        if notification_data_cache["tide_date"] != today or not notification_data_cache["tide_days"]:
+            tide_days = {}
+            for offset in (-1, 0, 1):
+                try:
+                    tide_days[offset] = fetch_qingdao_tide_data(date_ymd(offset))
+                except Exception as exc:
+                    errors.append(f"tide[{offset}]={repr(exc)}")
+            if 0 in tide_days and len(tide_days) >= 2:
+                notification_data_cache["tide_date"] = today
+                notification_data_cache["tide_days"] = tide_days
+                notification_data_cache["tide_fetched_at"] = now_ts
+        if now_ts - notification_data_cache["weather_fetched_at"] >= 600 or not notification_data_cache["weather"]:
+            try:
+                notification_data_cache["weather"] = _notification_fetch_weather()
+                notification_data_cache["weather_fetched_at"] = now_ts
+            except Exception as exc:
+                errors.append(f"weather={repr(exc)}")
+        if now_ts - notification_data_cache["wave_fetched_at"] >= 900 or not notification_data_cache["wave"]:
+            try:
+                notification_data_cache["wave"] = _notification_fetch_wave()
+                notification_data_cache["wave_fetched_at"] = now_ts
+            except Exception as exc:
+                errors.append(f"wave={repr(exc)}")
+        tide_days = notification_data_cache["tide_days"]
+        weather = notification_data_cache["weather"]
+        wave = notification_data_cache["wave"]
+        fetched_times = [
+            notification_data_cache["tide_fetched_at"],
+            notification_data_cache["weather_fetched_at"],
+            notification_data_cache["wave_fetched_at"],
+        ]
+    if not tide_days or not weather or not wave:
+        raise RuntimeError("通知数据不完整：" + "; ".join(errors))
+    tide = _notification_tide_snapshot(tide_days)
+    shore_degree = settings.get("shore_inward_degree")
+    degree = weather.get("degree")
+    snapshot = {
+        "generated_at": _now().isoformat(timespec="seconds"),
+        "site": {"name": settings.get("site_name", BEACH_NAME)},
+        "tide": tide,
+        "wind": {
+            "direction": wind_direction_text(degree),
+            "degree": degree,
+            "speed_kmh": weather.get("speed_kmh"),
+            "gust_kmh": weather.get("gust_kmh"),
+            "level": wind_level(weather.get("speed_kmh")) if wind_level else "--",
+            "relation": wind_relation(degree, shore_degree) if wind_relation else "unknown",
+        },
+        "wave": wave,
+        "data": {
+            "age_minutes": round(max(0, now_ts - min(x for x in fetched_times if x)) / 60, 1),
+            "errors": errors,
+        },
+    }
+    max_age = numeric_or_none(settings.get("max_data_age_minutes")) or 15
+    if snapshot["data"]["age_minutes"] > max_age:
+        raise RuntimeError(f"通知数据已过期：{snapshot['data']['age_minutes']} 分钟")
+    return snapshot
+
+
 class MyHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print(f"[{now_hm()}] {self.address_string()} {fmt % args}")
@@ -505,11 +691,71 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             "/api/cma_alarm": self.handle_cma_alarm,
             "/api/cma_alarm_detail": self.handle_cma_alarm_detail,
             "/api/weather": self.handle_weather,
+            "/api/notification/status": self.handle_notification_status,
+            "/api/notification/config": self.handle_notification_config,
+            "/api/notification/logs": self.handle_notification_logs,
         }
         if path in routes:
             routes[path]()
             return
         self.handle_page()
+
+    def do_POST(self):
+        path = urllib.parse.urlparse(self.path).path
+        admin_token = os.environ.get("NOTIFICATION_ADMIN_TOKEN", "")
+        supplied_token = self.headers.get("X-Notification-Admin-Token", "")
+        is_local = self.client_address[0] in ("127.0.0.1", "::1")
+        if admin_token:
+            authorized = hmac.compare_digest(admin_token, supplied_token)
+        else:
+            authorized = is_local
+        if not authorized:
+            self.write_json(json_payload(False, None, "--", "管理令牌不正确，设置操作被拒绝"), status=403)
+            return
+        if notification_manager is None:
+            self.write_json(json_payload(False, None, "--", "通知引擎未加载"), status=503)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > 1024 * 1024:
+                raise ValueError("请求内容为空或过大")
+            body = json.loads(self.rfile.read(length).decode("utf-8"))
+            if path == "/api/notification/config":
+                data = notification_manager.save_config(body.get("config"), body.get("secrets"))
+                self.write_json(json_payload(True, data, now_hm(), "通知配置已保存"))
+                return
+            if path == "/api/notification/test":
+                data = notification_manager.send_test(str(body.get("role", "")))
+                self.write_json(json_payload(True, data, now_hm(), "测试消息已发送"))
+                return
+            self.write_json(json_payload(False, None, "--", "接口不存在"), status=404)
+        except Exception as exc:
+            self.write_json(json_payload(False, None, "--", f"操作失败：{exc}"), status=400)
+
+    def handle_notification_status(self):
+        if notification_manager is None:
+            self.write_json(json_payload(False, None, "--", "通知引擎未加载"), status=503)
+            return
+        self.write_json(json_payload(True, notification_manager.status(), now_hm(), "通知引擎状态"))
+
+    def handle_notification_config(self):
+        if notification_manager is None:
+            self.write_json(json_payload(False, None, "--", "通知引擎未加载"), status=503)
+            return
+        try:
+            self.write_json(json_payload(True, notification_manager.public_config(), now_hm(), "通知配置"))
+        except Exception as exc:
+            self.write_json(json_payload(False, None, "--", f"读取通知配置失败：{exc}"), status=500)
+
+    def handle_notification_logs(self):
+        if notification_manager is None:
+            self.write_json(json_payload(False, None, "--", "通知引擎未加载"), status=503)
+            return
+        try:
+            limit = self.query_param("limit") or "50"
+            self.write_json(json_payload(True, notification_manager.logs(limit), now_hm(), "通知日志"))
+        except Exception as exc:
+            self.write_json(json_payload(False, None, "--", f"读取通知日志失败：{exc}"), status=500)
 
     def handle_tide(self):
         target_date = self.query_date()
@@ -1696,7 +1942,9 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/html;charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
-        self.wfile.write(HTML.encode("utf-8"))
+        settings_path = os.environ.get("NOTIFICATION_SETTINGS_PATH", "/notification-admin")
+        page = SETTINGS_HTML if urllib.parse.urlparse(self.path).path == settings_path else HTML
+        self.wfile.write(page.encode("utf-8"))
 
 
 def first_present(row, keys):
@@ -2228,6 +2476,133 @@ button:disabled{cursor:wait;opacity:.65}.refresh-btn.is-loading{color:var(--text
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
 @media (max-width:1079px){html:not(.mobile) .content{height:calc(100vh - 94px);overflow:auto}.quad-grid{min-height:520px}}
 @media (max-height:740px) and (min-width:1080px){.topbar{height:56px;flex-basis:56px}.content{height:calc(100vh - 86px);padding:10px;gap:10px}.quad-grid{gap:10px}.quad-tl{gap:10px}.card{padding:10px}.module-title{margin-bottom:8px;padding-bottom:7px}}
+
+/* Deep-sea telemetry skin: CSS-only visual refinement. */
+:root{
+  --tech-bg:#020812;
+  --tech-panel:rgba(5,16,31,.86);
+  --tech-panel-deep:rgba(2,10,22,.94);
+  --tech-cyan:#19d9ff;
+  --tech-cyan-soft:rgba(25,217,255,.16);
+  --tech-line:rgba(99,222,255,.20);
+  --tech-line-hot:rgba(99,222,255,.58);
+  --tech-text:#eafaff;
+  --tech-muted:#7e9bad;
+  --tech-radius:10px;
+}
+@keyframes techGridDrift{to{background-position:56px 28px,28px 56px,0 0}}
+@keyframes techEdgeRun{0%{transform:translateX(-115%);opacity:0}12%,78%{opacity:1}100%{transform:translateX(115%);opacity:0}}
+@keyframes techPanelBreathe{0%,100%{border-color:rgba(99,222,255,.18);box-shadow:0 14px 34px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.035)}50%{border-color:rgba(99,222,255,.31);box-shadow:0 14px 38px rgba(0,0,0,.38),0 0 26px rgba(25,217,255,.075),inset 0 1px 0 rgba(255,255,255,.055)}}
+@keyframes techValuePulse{0%,100%{filter:brightness(1);text-shadow:0 0 8px rgba(25,217,255,.25)}50%{filter:brightness(1.15);text-shadow:0 0 16px rgba(25,217,255,.55)}}
+@keyframes techTitleSignal{0%,100%{transform:scaleY(.68);opacity:.65}50%{transform:scaleY(1);opacity:1}}
+@keyframes techSweep{0%{transform:translateY(-140%)}100%{transform:translateY(440%)}}
+@keyframes techBootIn{0%{opacity:0;transform:translateY(16px) scale(.985);filter:blur(5px)}58%{opacity:1;filter:blur(0)}100%{transform:translateY(0) scale(1)}}
+@keyframes techHoloShift{0%{background-position:0 0,0 0,0 0}100%{background-position:96px 48px,-72px 36px,0 0}}
+@keyframes techCornerCharge{0%,100%{opacity:.5;filter:drop-shadow(0 0 3px rgba(25,217,255,.35))}50%{opacity:1;filter:drop-shadow(0 0 9px rgba(25,217,255,.95))}}
+@keyframes techSignalGlitch{0%,91%,100%{text-shadow:0 0 8px rgba(25,217,255,.38);transform:translate(-50%,-50%)}92%{text-shadow:-2px 0 #19d9ff,2px 0 rgba(255,190,74,.75);transform:translate(calc(-50% - 1px),-50%)}93%{text-shadow:2px 0 #19d9ff,-2px 0 rgba(255,190,74,.75);transform:translate(calc(-50% + 1px),-50%)}94%{text-shadow:0 0 8px rgba(25,217,255,.38);transform:translate(-50%,-50%)}}
+@keyframes techRadarSpin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+@keyframes techRadarPing{0%{opacity:.05;transform:translate(-50%,-50%) scale(.65)}55%{opacity:.52}100%{opacity:0;transform:translate(-50%,-50%) scale(1.35)}}
+@keyframes techWindFloat{0%,100%{transform:translateY(0);text-shadow:0 0 9px rgba(255,193,76,.28)}50%{transform:translateY(-2px);text-shadow:0 0 18px rgba(255,193,76,.58)}}
+@keyframes techMapPulse{0%,100%{opacity:.32;filter:saturate(1)}50%{opacity:.62;filter:saturate(1.25)}}
+@keyframes techTideCurrent{0%{transform:translateX(-135%);opacity:0}18%,76%{opacity:.7}100%{transform:translateX(135%);opacity:0}}
+@keyframes techOrangePulse{0%,100%{text-shadow:0 0 8px rgba(255,171,0,.3);filter:brightness(1)}50%{text-shadow:0 0 10px rgba(255,171,0,.65),0 0 24px rgba(255,121,0,.24);filter:brightness(1.2)}}
+@keyframes techClockEcho{0%,100%{text-shadow:0 0 8px rgba(25,217,255,.65),0 0 28px rgba(25,217,255,.22)}48%{text-shadow:-2px 0 rgba(25,217,255,.42),2px 0 rgba(92,125,255,.28),0 0 24px rgba(25,217,255,.4)}52%{text-shadow:2px 0 rgba(25,217,255,.42),-2px 0 rgba(92,125,255,.28),0 0 24px rgba(25,217,255,.4)}}
+@keyframes techCellScan{0%{transform:translateY(-160%);opacity:0}20%,55%{opacity:.38}100%{transform:translateY(420%);opacity:0}}
+
+html,body{background:var(--tech-bg);color:var(--tech-text)}
+body{
+  background:
+    radial-gradient(ellipse at 50% -18%,rgba(0,141,184,.24),transparent 44%),
+    radial-gradient(circle at 88% 78%,rgba(0,78,118,.12),transparent 34%),
+    linear-gradient(rgba(25,217,255,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(25,217,255,.025) 1px,transparent 1px),
+    var(--tech-bg);
+  background-size:auto,auto,28px 28px,28px 28px,auto;
+  animation:techGridDrift 28s linear infinite;
+}
+body::before{content:"";position:fixed;inset:0;z-index:1000;pointer-events:none;background:repeating-linear-gradient(180deg,transparent 0,transparent 3px,rgba(145,232,255,.012) 4px);mix-blend-mode:screen}
+
+.topbar{
+  background:linear-gradient(180deg,rgba(3,12,25,.98),rgba(3,12,25,.88));
+  border-bottom:1px solid var(--tech-line);
+  box-shadow:0 10px 35px rgba(0,0,0,.34),0 1px 0 rgba(25,217,255,.06) inset;
+  backdrop-filter:blur(18px) saturate(130%);
+}
+.topbar::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:linear-gradient(90deg,transparent 0,var(--tech-cyan) 28%,rgba(255,255,255,.88) 50%,var(--tech-cyan) 72%,transparent 100%);transform:translateX(-115%);animation:techEdgeRun 7s cubic-bezier(.4,0,.2,1) infinite}
+.brand-icon{color:var(--tech-cyan);filter:drop-shadow(0 0 8px rgba(25,217,255,.36))}
+.topbar-title{background:none;color:#b9f7ff;-webkit-text-fill-color:#b9f7ff;filter:drop-shadow(0 0 9px rgba(25,217,255,.34));letter-spacing:.18em;animation:techSignalGlitch 8s steps(1,end) infinite}
+.top-actions{border-radius:8px;padding:3px;background:rgba(3,17,31,.72);border:1px solid rgba(99,222,255,.14);box-shadow:inset 0 0 18px rgba(25,217,255,.025)}
+.sound-btn,.refresh-btn,.day-btn,.btn{border-radius:6px;border:1px solid transparent;background:transparent;box-shadow:none;color:#8eafbe;transition:color .18s ease,background .18s ease,border-color .18s ease,box-shadow .18s ease,transform .12s ease}
+.sound-btn:hover,.refresh-btn:hover,.day-btn:hover,.btn:hover{color:var(--tech-text);background:rgba(25,217,255,.09);border-color:rgba(25,217,255,.24);box-shadow:inset 0 0 16px rgba(25,217,255,.07)}
+.sound-btn:active,.refresh-btn:active,.day-btn:active,.btn:active{transform:translateY(1px) scale(.985)}
+.refresh-btn{color:var(--tech-cyan);background:rgba(25,217,255,.055)}
+.day-btn.active{color:#00151d;background:linear-gradient(135deg,#72eaff,var(--tech-cyan));border-color:#80edff;box-shadow:0 0 16px rgba(25,217,255,.24),inset 0 1px 0 rgba(255,255,255,.5)}
+
+.content{position:relative}
+.content::before{content:"";position:absolute;inset:7px;pointer-events:none;border:1px solid rgba(25,217,255,.035);background:linear-gradient(90deg,var(--tech-cyan),var(--tech-cyan)) left top/18px 1px no-repeat,linear-gradient(180deg,var(--tech-cyan),var(--tech-cyan)) left top/1px 18px no-repeat,linear-gradient(270deg,var(--tech-cyan),var(--tech-cyan)) right bottom/18px 1px no-repeat,linear-gradient(0deg,var(--tech-cyan),var(--tech-cyan)) right bottom/1px 18px no-repeat;opacity:.36}
+.quad-grid{position:relative;z-index:1}
+.card{
+  isolation:isolate;border-radius:var(--tech-radius);
+  background:linear-gradient(145deg,rgba(7,22,40,.91),rgba(3,11,24,.94));
+  border:1px solid var(--tech-line);
+  box-shadow:0 14px 34px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.035);
+  animation:techBootIn .78s cubic-bezier(.16,1,.3,1) both,techPanelBreathe 8s ease-in-out .8s infinite;
+}
+.card::before{inset:0;opacity:1;background:linear-gradient(135deg,rgba(255,255,255,.045),transparent 18%),repeating-linear-gradient(0deg,transparent 0,transparent 4px,rgba(25,217,255,.014) 5px);z-index:0;animation:none}
+.card::after{display:block;content:"";position:absolute;z-index:1;left:0;right:0;top:0;height:34%;pointer-events:none;background:linear-gradient(180deg,transparent,rgba(25,217,255,.09),rgba(255,255,255,.035),transparent);animation:techSweep 6.8s cubic-bezier(.4,0,.2,1) infinite}
+.quad-tr .card{animation-delay:.12s,.92s}.quad-bl .card{animation-delay:.22s,1.02s}.quad-br .card{animation-delay:.32s,1.12s}.quad-tl .weather-card{animation-delay:.1s,.9s}
+.corner{display:block;width:16px;height:16px;border-color:var(--tech-cyan);opacity:.78;filter:drop-shadow(0 0 5px rgba(25,217,255,.65));animation:techCornerCharge 2.8s ease-in-out infinite}.tr,.bl{animation-delay:-.7s}.br{animation-delay:-1.4s}.tl{left:7px;top:7px;border-left:1px solid;border-top:1px solid}
+
+.module-title{color:var(--tech-text);text-shadow:none;border-bottom:1px solid rgba(99,222,255,.14);letter-spacing:.16em}
+.module-title span:first-child{color:var(--tech-text)}
+.module-title::before{height:16px;width:2px;background:var(--tech-cyan);box-shadow:0 0 10px rgba(25,217,255,.8);animation:techTitleSignal 2.2s ease-in-out infinite}
+.module-title::after{content:"";position:absolute;left:0;bottom:-1px;width:38%;height:1px;background:linear-gradient(90deg,var(--tech-cyan),transparent);opacity:.72}
+.module-title small,.module-title small.update-time{color:var(--tech-muted)}
+
+.time-card{background:radial-gradient(circle at 50% 48%,rgba(25,217,255,.10),transparent 48%),linear-gradient(145deg,rgba(7,22,40,.94),rgba(3,11,24,.96))}
+.time-big{color:#bff7ff;text-shadow:0 0 8px rgba(25,217,255,.65),0 0 28px rgba(25,217,255,.22);font-variant-numeric:tabular-nums;animation:techClockEcho 3.8s ease-in-out infinite}
+.date-big{color:#cfe4ed}.lunar-big{color:#ffbc4d;text-shadow:0 0 12px rgba(255,188,77,.3)}
+
+.weather-cell,.ocean-cell,.extra-box{border-radius:7px;background:linear-gradient(145deg,rgba(4,14,29,.82),rgba(6,20,36,.62));border:1px solid rgba(99,222,255,.105);box-shadow:inset 0 1px 0 rgba(255,255,255,.025);transition:background .2s ease,border-color .2s ease,transform .2s ease;animation:techBootIn .58s cubic-bezier(.16,1,.3,1) both}
+.weather-cell:nth-child(1),.ocean-cell:nth-child(1){animation-delay:.32s}.weather-cell:nth-child(2),.ocean-cell:nth-child(2){animation-delay:.4s}.weather-cell:nth-child(3),.ocean-cell:nth-child(3){animation-delay:.48s}.weather-cell:nth-child(4),.ocean-cell:nth-child(4){animation-delay:.56s}
+.weather-cell:hover,.ocean-cell:hover,.extra-box:hover{background:linear-gradient(145deg,rgba(6,25,44,.92),rgba(5,18,34,.8));border-color:rgba(99,222,255,.28);transform:translateY(-1px)}
+.weather-cell .label,.ocean-cell .label,.extra-box .label{color:#84a5b6;letter-spacing:.045em}
+.weather-data-value,.weather-data-text,.ocean-cell strong,.extra-box .value,.data-value{color:#8cecff;text-shadow:0 0 10px rgba(25,217,255,.28);animation:techValuePulse 4.8s ease-in-out infinite}
+.weather-cell:nth-child(2) .weather-data-value,.ocean-cell:nth-child(2) strong{animation-delay:-1.2s}.weather-cell:nth-child(3) .weather-data-value,.ocean-cell:nth-child(3) strong{animation-delay:-2.4s}
+.weather-cell:nth-child(2){isolation:isolate;background:radial-gradient(circle at 50% 58%,rgba(25,217,255,.085),transparent 42%),linear-gradient(145deg,rgba(5,18,33,.94),rgba(4,13,27,.82));border-color:rgba(99,222,255,.18);box-shadow:inset 0 0 26px rgba(25,217,255,.04),0 0 18px rgba(25,217,255,.035)}
+.weather-cell:nth-child(2)::before{content:"";position:absolute;z-index:0;left:50%;top:58%;width:min(104px,70%);aspect-ratio:1;border-radius:50%;border:1px solid rgba(25,217,255,.24);background:repeating-radial-gradient(circle,transparent 0 15px,rgba(25,217,255,.075) 16px 17px),conic-gradient(from 0deg,transparent 0 76%,rgba(25,217,255,.28) 92%,transparent 100%);transform:translate(-50%,-50%);animation:techRadarSpin 4.8s linear infinite;filter:drop-shadow(0 0 7px rgba(25,217,255,.18))}
+.weather-cell:nth-child(2)::after{content:"";position:absolute;z-index:0;left:50%;top:58%;width:min(86px,58%);aspect-ratio:1;border-radius:50%;border:1px solid rgba(25,217,255,.38);transform:translate(-50%,-50%);animation:techRadarPing 2.6s ease-out infinite}
+.weather-cell:nth-child(2) .label{position:relative;z-index:2;color:#d6e8ef;text-shadow:0 1px 2px rgba(0,0,0,.8)}
+.weather-cell:nth-child(2) .weather-cell-inner{position:relative;z-index:2}
+.weather-cell:nth-child(2) .wind-text-big{color:#8cecff!important;text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 12px rgba(25,217,255,.34)!important;animation:techValuePulse 4.8s ease-in-out infinite!important;letter-spacing:.02em}
+
+/* Tide emphasis and telemetry effects. */
+.ocean-cell.cell-orange .label{color:#ffb43f;text-shadow:0 0 8px rgba(255,171,0,.28)}
+.ocean-cell.cell-orange strong,.ocean-cell.cell-orange strong.data-value,.ocean-cell.cell-orange strong small{color:#ffb43f!important}
+#currentLevel,#tideProgress{animation:techOrangePulse 2.8s ease-in-out infinite!important;text-shadow:0 0 10px rgba(255,171,0,.48)!important}
+.tide-card{box-shadow:0 14px 34px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.035),inset 0 -18px 48px rgba(0,112,153,.045)}
+#tideChart{animation:techPanelBreathe 6s ease-in-out infinite}
+.status-badge{border-radius:6px;background:rgba(25,217,255,.08);border-color:rgba(25,217,255,.32);box-shadow:inset 0 0 18px rgba(25,217,255,.05)}
+
+.map-shell,#tideChart{border-radius:7px;border:1px solid rgba(99,222,255,.2);box-shadow:inset 0 0 36px rgba(0,0,0,.38),0 0 0 1px rgba(0,0,0,.26);background-color:#020914}
+.map-shell::before{opacity:.48;animation:radarSweep 7.5s linear infinite,techMapPulse 3.6s ease-in-out infinite}.map-shell::after{background-size:44px 44px,44px 44px;opacity:.75}
+.typhoon-frame{-webkit-filter:saturate(.78) hue-rotate(4deg) brightness(.82) contrast(1.12)}
+.map-actions{padding:4px;background:rgba(2,11,23,.72);border:1px solid rgba(99,222,255,.14);border-radius:8px;backdrop-filter:blur(10px)}
+.map-actions .btn{background:rgba(5,19,34,.82);border-color:rgba(99,222,255,.18)}
+#tideChart::before{background:linear-gradient(90deg,transparent,rgba(25,217,255,.08),transparent);animation-duration:8s}
+
+.cma-alarm-bar{background:rgba(3,12,25,.94);border-bottom:1px solid rgba(99,222,255,.12);box-shadow:inset 0 -1px 0 rgba(255,255,255,.018)}
+.cma-alarm-bar-label{border-radius:5px;text-shadow:none}.cma-alarm-marquee-inner{animation-duration:105s}
+.alarm-modal-mask{background:rgba(0,5,12,.76);backdrop-filter:blur(12px)}
+.alarm-modal-box{border-radius:var(--tech-radius);background:linear-gradient(145deg,rgba(7,22,40,.985),rgba(2,9,20,.99));border-color:rgba(99,222,255,.28);box-shadow:0 30px 80px rgba(0,0,0,.62),0 0 45px rgba(25,217,255,.08)}
+.alarm-modal-header,.alarm-modal-footer{border-color:rgba(99,222,255,.14)}
+.alarm-modal-link,.alarm-modal-close{border-radius:5px}
+
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:rgba(255,255,255,.018)}::-webkit-scrollbar-thumb{background:rgba(25,217,255,.25);border-radius:5px}::-webkit-scrollbar-thumb:hover{background:rgba(25,217,255,.44)}
+@media (prefers-reduced-motion:reduce){body{animation:none}.card,.card::before,.card::after,.topbar::after,.topbar-title,.corner,.module-title::before,.time-big,.weather-cell,.ocean-cell,.extra-box,.weather-cell:nth-child(2)::before,.weather-cell:nth-child(2)::after,.weather-cell:nth-child(2) .wind-text-big,.ocean-cell.cell-orange::after,#currentLevel,#tideProgress,#tideChart,.map-shell::before,.weather-data-value,.weather-data-text,.ocean-cell strong,.extra-box .value,.data-value{animation:none!important;transform:none}}
+@media (max-width:640px){.topbar-title{animation:none}.weather-cell:nth-child(2)::before{width:82px}.weather-cell:nth-child(2)::after{width:68px}.card::after{opacity:.55}}
+@media (prefers-reduced-transparency:reduce){.topbar,.card,.map-actions,.alarm-modal-mask{backdrop-filter:none}.topbar{background:#05101f}.card{background:#071629}}
+@media (max-width:1079px){body{animation-duration:42s}.content::before{display:none}.card{animation-duration:12s}.topbar-title{letter-spacing:.1em}}
 </style>
 </head>
 <body>
@@ -3337,6 +3712,36 @@ boot();
 </html>
 """
 
+SETTINGS_HTML = r"""
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>海况通知设置</title>
+<style>
+:root{color-scheme:dark;--bg:#03101d;--panel:#071a2b;--panel2:#0a2236;--line:#19445d;--text:#e5f6ff;--muted:#86aabd;--accent:#22d3ee;--ok:#35d39a;--warn:#ffad42;--bad:#ff657a;--radius:12px}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(circle at 70% 0,#0b3551 0,transparent 33%),linear-gradient(145deg,#020a13,#041624 58%,#03101d);color:var(--text);font-family:"Microsoft YaHei UI","Segoe UI",sans-serif;min-height:100dvh}.shell{max-width:1440px;margin:auto;padding:24px}.top{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:14px 18px;border:1px solid var(--line);border-radius:var(--radius);background:rgba(5,24,39,.86);backdrop-filter:blur(18px);position:sticky;top:12px;z-index:20}.title{font-size:20px;font-weight:700;letter-spacing:.06em}.subtitle{font-size:12px;color:var(--muted);margin-top:4px}.btn{border:1px solid #25617c;background:#0b2b42;color:var(--text);border-radius:9px;padding:10px 15px;cursor:pointer;font-weight:650;white-space:nowrap}.btn:hover{border-color:var(--accent);background:#0d3852}.btn:active{transform:translateY(1px)}.btn.primary{background:var(--accent);border-color:var(--accent);color:#01202a}.btn.danger{color:#ffb8c1;border-color:#6b3040}.layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;margin-top:24px}.side{position:sticky;top:110px;align-self:start}.step{display:flex;gap:12px;padding:13px;border-left:2px solid var(--line);color:var(--muted);text-decoration:none}.step:hover,.step.active{color:var(--text);border-color:var(--accent);background:linear-gradient(90deg,rgba(34,211,238,.1),transparent)}.num{font-family:Consolas,monospace;color:var(--accent)}.status{margin-top:18px;padding:14px;border:1px solid var(--line);border-radius:var(--radius);background:rgba(7,26,43,.7);font-size:12px;line-height:1.8}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 12px var(--ok);margin-right:7px}.content{min-width:0}.section{scroll-margin-top:110px;margin-bottom:22px;padding:24px;border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(140deg,rgba(9,31,49,.94),rgba(5,22,36,.92));box-shadow:0 20px 55px rgba(0,8,16,.28);animation:enter .45s ease both}.section h2{font-size:18px;margin:0 0 6px}.hint{color:var(--muted);font-size:13px;line-height:1.7;margin:0 0 20px}.guide{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.guide-item{padding:16px;background:#071827;border:1px solid #153b52;border-radius:10px}.guide-item b{display:block;color:var(--accent);margin-bottom:8px}.guide-item p{font-size:13px;color:var(--muted);line-height:1.7;margin:0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:flex;flex-direction:column;gap:7px}.field.full{grid-column:1/-1}label{font-size:12px;color:#a9cad9}.input,select,textarea{width:100%;border:1px solid #235069;background:#041522;color:var(--text);border-radius:8px;padding:10px 11px;outline:none}.input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(34,211,238,.1)}input[type=checkbox]{accent-color:var(--accent)}.role,.rule{border:1px solid #184158;border-radius:10px;padding:17px;background:rgba(3,16,29,.55);margin-top:12px}.role-head,.rule-head,.actions{display:flex;align-items:center;justify-content:space-between;gap:12px}.role-name,.rule-name{font-weight:700}.badge{font:11px Consolas,monospace;color:var(--ok);border:1px solid rgba(53,211,154,.35);padding:4px 7px;border-radius:7px}.badge.off{color:var(--muted);border-color:var(--line)}.role-body{margin-top:14px}.condition{display:grid;grid-template-columns:1.25fr .8fr 1fr auto;gap:8px;margin-top:8px}.roles-checks{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.check{padding:7px 9px;background:#0a2538;border-radius:7px;font-size:12px}.toast{position:fixed;right:24px;bottom:24px;max-width:380px;padding:14px 18px;background:#0d3045;border:1px solid var(--accent);border-radius:10px;box-shadow:0 16px 50px #0008;display:none;z-index:99}.toast.bad{border-color:var(--bad)}.footer-actions{position:sticky;bottom:12px;display:flex;justify-content:flex-end;gap:10px;padding:13px;margin-top:20px;background:rgba(4,18,30,.9);border:1px solid var(--line);border-radius:var(--radius);backdrop-filter:blur(16px)}@keyframes enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@media(max-width:850px){.shell{padding:12px}.layout{grid-template-columns:1fr}.side{position:static;display:flex;overflow:auto}.step{min-width:130px;border-left:0;border-bottom:2px solid var(--line)}.guide,.grid{grid-template-columns:1fr}.condition{grid-template-columns:1fr 1fr}.condition .value{grid-column:1/-1}.top{top:6px}.top .subtitle{display:none}}@media(prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}}
+</style></head><body><div class="shell">
+<header class="top"><div><div class="title">海况智能通知控制台</div><div class="subtitle">角色路由、钉钉通道与组合规则</div></div><div class="actions"><button class="btn" onclick="location.href='/'">返回大屏</button><button class="btn primary" onclick="saveAll()">保存全部设置</button></div></header>
+<div class="layout"><aside class="side"><a class="step active" href="#guide"><span class="num">01</span>创建机器人</a><a class="step" href="#channel"><span class="num">02</span>连接钉钉</a><a class="step" href="#roles"><span class="num">03</span>角色路由</a><a class="step" href="#rules"><span class="num">04</span>组合规则</a><a class="step" href="#launch"><span class="num">05</span>演练启用</a><div class="status"><div><span class="dot"></span><span id="engineState">读取引擎状态</span></div><div id="lastRun">最近检查：--</div><div id="ruleCount">启用规则：--</div></div></aside>
+<main class="content"><section class="section" id="guide"><h2>第一步：在钉钉群创建自定义机器人</h2><p class="hint">这一步需要在钉钉客户端完成。建议每类执行团队使用独立群，管理人员也可以与其他角色共用一个群。</p><div class="guide"><div class="guide-item"><b>1. 打开目标群</b><p>进入群设置，找到机器人或智能群助手，添加“自定义机器人”。</p></div><div class="guide-item"><b>2. 设置安全方式</b><p>选择“加签”，复制 Webhook 和以 SEC 开头的密钥。若启用关键词，请填写“海况通知”。</p></div><div class="guide-item"><b>3. 回到本页面</b><p>在下一步粘贴 Webhook 和密钥。保存后可按角色发送测试消息。</p></div></div></section>
+<section class="section" id="channel"><h2>第二步：连接钉钉机器人</h2><p class="hint">默认通道适合所有角色共用一个群。敏感字段仅保存在本机的独立配置文件中，接口不会回显原文。</p><div class="grid"><div class="field full"><label>默认 Webhook</label><input class="input secret" data-secret="DINGTALK_WEBHOOK_URL" type="password" placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."></div><div class="field"><label>默认加签密钥</label><input class="input secret" data-secret="DINGTALK_SECRET" type="password" placeholder="SEC..."></div><div class="field"><label>岸线向岸方位角</label><input id="shoreDegree" class="input" type="number" min="0" max="359" placeholder="例如正西为 270"></div><div class="field"><label>检查间隔（秒）</label><input id="interval" class="input" type="number" min="30"></div><div class="field"><label>数据最长有效时间（分钟）</label><input id="maxAge" class="input" type="number" min="1"></div></div></section>
+<section class="section" id="roles"><div class="rule-head"><div><h2>第三步：配置角色路由</h2><p class="hint">留空时使用默认群；填写专属 Webhook 后，该角色会发送到自己的群。</p></div></div><div id="roleList"></div></section>
+<section class="section" id="rules"><div class="rule-head"><div><h2>第四步：设置组合触发规则</h2><p class="hint">同一规则的全部条件同时满足，并持续达到稳定时间后才会触发。</p></div><button class="btn" onclick="addRule()">新增规则</button></div><div id="ruleList"></div></section>
+<section class="section" id="launch"><h2>第五步：先演练，再正式启用</h2><p class="hint">演练模式会记录命中结果但不发送钉钉消息。确认条件正确后，再关闭演练模式。</p><div class="grid"><label class="check"><input id="engineEnabled" type="checkbox"> 启用规则引擎</label><label class="check"><input id="dryRun" type="checkbox"> 演练模式，不真实发送</label></div><p class="hint" style="margin-top:18px;color:var(--warn)">关闭演练模式前，请至少向每个已配置角色发送一次测试消息，并确认岸线方向设置正确。</p></section><div class="footer-actions"><button class="btn" onclick="loadAll()">放弃未保存修改</button><button class="btn primary" onclick="saveAll()">保存全部设置</button></div></main></div></div><div id="toast" class="toast"></div>
+<script>
+let cfg=null;const fields=[['tide.phase','潮汐阶段'],['tide.progress','潮段进度 %'],['tide.level_cm','当前潮高 cm'],['wind.relation','风向关系'],['wind.speed_kmh','风速 km/h'],['wave.height_m','近海浪高 m']];const ops=[['equals','等于'],['gte','大于等于'],['lte','小于等于'],['gt','大于'],['lt','小于'],['in','属于列表']];
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function toast(msg,bad=false){let t=document.getElementById('toast');t.textContent=msg;t.className='toast'+(bad?' bad':'');t.style.display='block';clearTimeout(t._x);t._x=setTimeout(()=>t.style.display='none',3800)}
+function adminToken(){let t=sessionStorage.getItem('notificationAdminToken')||'';if(!t){t=prompt('请输入服务器通知设置管理令牌')||'';if(t)sessionStorage.setItem('notificationAdminToken',t)}return t}async function api(url,opt){opt=opt||{};if(opt.method==='POST'){opt.headers=Object.assign({},opt.headers||{},{'X-Notification-Admin-Token':adminToken()})}let r=await fetch(url,opt),j=await r.json();if(!r.ok||!j.success){if(r.status===403)sessionStorage.removeItem('notificationAdminToken');throw Error(j.msg||'请求失败')}return j.data}
+async function loadAll(){try{cfg=await api('/api/notification/config');let s=cfg.settings;shoreDegree.value=s.shore_inward_degree??'';interval.value=s.interval_seconds||60;maxAge.value=s.max_data_age_minutes||15;engineEnabled.checked=s.enabled!==false;dryRun.checked=s.dry_run!==false;renderRoles();renderRules();let st=await api('/api/notification/status');engineState.textContent=st.running?'规则引擎运行中':'规则引擎未运行';lastRun.textContent='最近检查：'+(st.last_run||'尚未检查');updateCount()}catch(e){toast(e.message,true)}}
+function renderRoles(){roleList.innerHTML=Object.entries(cfg.roles).map(([id,r])=>`<div class="role" data-role="${esc(id)}"><div class="role-head"><div><span class="role-name">${esc(r.name)}</span> <span class="badge ${r.webhook_configured?'':'off'}">${r.webhook_configured?'通道已配置':'使用默认通道'}</span></div><button class="btn" onclick="testRole('${esc(id)}')">发送测试</button></div><div class="role-body grid"><div class="field full"><label>专属 Webhook，可留空</label><input class="input secret" data-secret="${esc(r.webhook_env)}" type="password" placeholder="已配置的值不会回显"></div><div class="field"><label>专属加签密钥，可留空</label><input class="input secret" data-secret="${esc(r.secret_env)}" type="password" placeholder="SEC..."></div><div class="field"><label>需要 @ 的手机号</label><input class="input secret" data-secret="${esc(r.mention_mobiles_env)}" placeholder="多个号码用英文逗号分隔"></div></div></div>`).join('')}
+function conditionHtml(c,ci){return `<div class="condition" data-ci="${ci}"><select class="cf">${fields.map(x=>`<option value="${x[0]}" ${c.field===x[0]?'selected':''}>${x[1]}</option>`).join('')}</select><select class="co">${ops.map(x=>`<option value="${x[0]}" ${c.operator===x[0]?'selected':''}>${x[1]}</option>`).join('')}</select><input class="input value cv" value="${esc(Array.isArray(c.value)?c.value.join(','):c.value)}" placeholder="如 80 或 onshore,cross_onshore"><button class="btn danger" onclick="this.parentElement.remove()">删除</button></div>`}
+function renderRules(){ruleList.innerHTML=cfg.rules.map((r,i)=>`<div class="rule" data-ri="${i}"><div class="rule-head"><div><input class="re" type="checkbox" ${r.enabled?'checked':''}> <input class="input rn" style="display:inline-block;width:260px" value="${esc(r.name)}"></div><button class="btn danger" onclick="removeRule(${i})">移除</button></div><div class="grid" style="margin-top:14px"><div class="field"><label>规则 ID</label><input class="input rid" value="${esc(r.id)}"></div><div class="field"><label>条件持续时间（分钟）</label><input class="input stable" type="number" min="0" value="${r.stable_for_minutes||0}"></div><div class="field full"><label>通知内容</label><textarea class="msg" rows="3">${esc(r.message)}</textarea></div></div><div class="roles-checks">${Object.entries(cfg.roles).map(([id,x])=>`<label class="check"><input class="rr" data-role="${id}" type="checkbox" ${(r.roles||[]).includes(id)?'checked':''}> ${esc(x.name)}</label>`).join('')}</div><div class="conditions">${((r.conditions||{}).all||[]).map(conditionHtml).join('')}</div><button class="btn" style="margin-top:10px" onclick="addCondition(this)">添加条件</button></div>`).join('');updateCount()}
+function collectRules(){return [...document.querySelectorAll('.rule')].map((el,i)=>{let old=cfg.rules[+el.dataset.ri]||{};return {...old,id:el.querySelector('.rid').value.trim(),name:el.querySelector('.rn').value.trim(),enabled:el.querySelector('.re').checked,stable_for_minutes:+el.querySelector('.stable').value||0,message:el.querySelector('.msg').value.trim(),roles:[...el.querySelectorAll('.rr:checked')].map(x=>x.dataset.role),conditions:{all:[...el.querySelectorAll('.condition')].map(c=>{let op=c.querySelector('.co').value,v=c.querySelector('.cv').value.trim();if(op==='in')v=v.split(',').map(x=>x.trim()).filter(Boolean);else if(v!==''&&!isNaN(Number(v)))v=Number(v);return{field:c.querySelector('.cf').value,operator:op,value:v}})}}})}
+function addRule(){cfg.rules=collectRules();cfg.rules.push({id:'rule_'+Date.now(),name:'新通知规则',enabled:false,conditions:{all:[]},stable_for_minutes:5,roles:[],priority:'normal',deduplication:'per_tide_segment',message:'请根据当前海况安排现场工作。'});renderRules()}function removeRule(i){if(!confirm('确定移除这条规则吗？'))return;cfg.rules=collectRules().filter((_,x)=>x!==i);renderRules()}function addCondition(btn){btn.previousElementSibling.insertAdjacentHTML('beforeend',conditionHtml({field:'tide.progress',operator:'gte',value:80},Date.now()))}
+function updateCount(){let n=document.querySelectorAll('.re:checked').length;ruleCount.textContent='启用规则：'+n}
+async function saveAll(silent=false){try{cfg.rules=collectRules();Object.assign(cfg.settings,{enabled:engineEnabled.checked,dry_run:dryRun.checked,interval_seconds:+interval.value||60,max_data_age_minutes:+maxAge.value||15,shore_inward_degree:shoreDegree.value===''?null:+shoreDegree.value});Object.values(cfg.roles).forEach(r=>{delete r.webhook_configured;delete r.secret_configured;delete r.mobiles_configured});let secrets={};document.querySelectorAll('.secret').forEach(x=>{if(x.value.trim())secrets[x.dataset.secret]=x.value.trim()});cfg=await api('/api/notification/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({config:cfg,secrets})});renderRoles();renderRules();if(!silent)toast('配置已保存，规则引擎将在下一轮使用新配置')}catch(e){toast(e.message,true);throw e}}
+async function testRole(id){if(!confirm('将向该角色的钉钉群真实发送一条测试消息，是否继续？'))return;try{await saveAll(true);await api('/api/notification/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:id})});toast('测试消息已发送，请到钉钉群确认')}catch(e){toast(e.message,true)}}
+document.addEventListener('change',e=>{if(e.target.classList.contains('re'))updateCount()});loadAll();
+</script></body></html>
+"""
+
 
 class ThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
@@ -3344,21 +3749,41 @@ class ThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 
 def start_server():
-    global server
+    global server, notification_manager
     try:
+        if NotificationManager is not None and notification_manager is None:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.environ.get("OCEAN_NOTIFICATION_CONFIG") or os.path.join(base_dir, "notification_config.json")
+            db_path = os.environ.get("OCEAN_NOTIFICATION_DB") or os.path.join(base_dir, "ocean_notifications.db")
+            if not os.path.exists(config_path):
+                bundled_config = os.path.join(base_dir, "notification_config.json")
+                if os.path.exists(bundled_config):
+                    os.makedirs(os.path.dirname(os.path.abspath(config_path)), exist_ok=True)
+                    shutil.copyfile(bundled_config, config_path)
+            if os.path.exists(config_path):
+                notification_manager = NotificationManager(config_path, db_path, notification_snapshot_provider)
+                notification_manager.start()
+                print(f"===== 通知规则引擎已启动（配置：{config_path}） =====")
         server = ThreadingTCPServer(("", PORT), MyHandler)
         print(f"===== Web 服务启动 0.0.0.0:{PORT} =====")
         server.serve_forever()
     except Exception as e:
         print("【服务启动异常】", e)
+    finally:
+        if notification_manager is not None:
+            notification_manager.stop()
+            notification_manager = None
 
 
 def stop_server():
-    global server
+    global server, notification_manager
     if server is not None:
         server.shutdown()
         server.server_close()
         server = None
+    if notification_manager is not None:
+        notification_manager.stop()
+        notification_manager = None
 
 
 if __name__ == "__main__":
