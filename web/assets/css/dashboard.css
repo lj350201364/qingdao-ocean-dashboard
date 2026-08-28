@@ -275,6 +275,7 @@ body{
 .ocean-cell .label{font-size:var(--fs-label-big);color:rgba(232,234,246,.82);font-weight:700;margin-bottom:6px;line-height:1.3;letter-spacing:.04em;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
 .ocean-cell strong{font-size:var(--fs-value-big);color:#00e5ff;font-weight:800;text-shadow:-1px -1px 0 rgba(0,0,0,.8),1px -1px 0 rgba(0,0,0,.8),-1px 1px 0 rgba(0,0,0,.8),1px 1px 0 rgba(0,0,0,.8),0 2px 4px rgba(0,0,0,.6),0 0 14px rgba(0,229,255,.45);white-space:nowrap;text-align:center;display:inline-flex;align-items:baseline;gap:2px;}
 .ocean-cell strong small{font-size:calc(var(--fs-value-big) * 0.55);color:inherit;margin-left:2px;font-weight:600;white-space:nowrap;}
+.ocean-cell strong.data-error{color:#ff647c!important;font-size:clamp(16px,1.35vw,24px);letter-spacing:.04em;text-shadow:0 0 12px rgba(255,82,108,.48);animation:none;}
 .ocean-cell .status-badge{font-size:var(--fs-value-big);padding:6px 18px;margin-top:0;}
 /* 橙色数据单元格 */
 .cell-orange .label{color:#ffab00;}

@@ -301,25 +301,24 @@ class NotificationManager:
 
     def evaluate_once(self):
         with self.lock:
+            # 记录每次检查尝试，而不是只记录成功取得快照的检查，便于状态页准确诊断。
+            self.last_run = now_cn().isoformat(timespec="seconds")
             config = self.load_config()
             settings = config.get("settings") or {}
             if not settings.get("enabled", True):
                 return {"skipped": "disabled"}
             window = notification_window_status(settings)
             if not window["active"]:
-                self.last_run = now_cn().isoformat(timespec="seconds")
                 self.last_error = ""
                 self.match_since.clear()
                 self.previous_snapshot = None
                 return {"skipped": "outside_notification_hours", "notification_schedule": window}
             active_rules = [rule for rule in (config.get("rules") or []) if rule.get("enabled")]
             if not active_rules:
-                self.last_run = now_cn().isoformat(timespec="seconds")
                 self.last_error = ""
                 return {"skipped": "no_enabled_rules"}
             snapshot = self.snapshot_provider(config)
             self.last_snapshot = snapshot
-            self.last_run = now_cn().isoformat(timespec="seconds")
             self.last_error = ""
             fired = []
             for rule in active_rules:

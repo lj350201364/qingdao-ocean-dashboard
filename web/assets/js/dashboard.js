@@ -612,7 +612,23 @@ function showChartUnavailable(){
 }
 function loadWeather(){fetchJSON(apiUrl("/api/weather"),20000,function(e,r){if(r&&r.tomorrow_unavailable){showWeatherUnavailable();return;}if(r&&r.data)renderWeather(r.data,r.updateTime);});}
 function loadWave(){fetchJSON(apiUrl("/api/wave"),20000,function(e,r){if(r&&r.tomorrow_unavailable){showWaveUnavailable();return;}if(r&&r.data)renderWave(r.data,r.updateTime);});}
-function loadOffshoreWave(){fetchJSON(apiUrl("/api/offshore_wave"),20000,function(e,r){if(e||!r||!r.data)return;var wh=r.data.wave_height||"--";setText("offshoreWaveHeight",wh);});}
+function setOffshoreWaveState(text,isError,detail){
+  var el=$("offshoreWaveHeight");
+  if(!el)return;
+  el.textContent=text||"--";
+  el.classList.toggle("data-error",!!isError);
+  el.title=detail||"";
+  el.setAttribute("aria-label",detail||("近海浪高 "+(text||"--")));
+}
+function loadOffshoreWave(){fetchJSON(apiUrl("/api/offshore_wave"),20000,function(e,r){
+  if(e||!r){setOffshoreWaveState("请求失败",true,"无法连接青岛浪高接口");return;}
+  if(!r.success||!r.data){
+    var label=String(r.error_code)==="502"?"502 异常":"接口异常";
+    setOffshoreWaveState(label,true,r.msg||"青岛浪高接口异常");
+    return;
+  }
+  setOffshoreWaveState(r.data.wave_height||"--",false,"青岛近海浪高");
+});}
 function loadAlarm(){fetchJSON(apiUrl("/api/alarm"),20000,function(e,r){});}
 function loadSdAlarm(){fetchJSON("/api/sd_alarm",45000,function(e,r){
   var listCard=$("alarmListCard");var container=$("alarmListContainer");var timeEl=$("alarmListTime");

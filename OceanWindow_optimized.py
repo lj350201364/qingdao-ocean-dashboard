@@ -524,8 +524,8 @@ def _notification_fetch_wave():
     raw_value = explicit or extract_wave_from_row(row) or extract_wave_from_row(result if isinstance(result, dict) else {})
     height = conservative_wave_height(raw_value) if conservative_wave_height else None
     if height is None:
-        raise ValueError("通知规则无法解析近海浪高")
-    return {"height_m": height, "raw": str(raw_value)}
+        raise ValueError("通知规则无法解析青岛近海浪高")
+    return {"height_m": height, "raw": str(raw_value), "source": "青岛海洋预报"}
 
 
 def numeric_or_none(value):
@@ -558,13 +558,14 @@ def _notification_tide_snapshot(tide_days):
     progress = max(0, min(100, round((now_minute - previous["minute"]) / total * 100)))
     rising = following["type"] in ("高潮", "满潮") or following["height"] > previous["height"]
     chart = []
-    for point in (tide_days.get(0) or {}).get("chart") or []:
-        if point.get("POINT_TYPE") != "hour":
-            continue
-        minute = numeric_or_none(point.get("TIDETIME"))
-        height = numeric_or_none(point.get("TIDEHEIGHT"))
-        if minute is not None and height is not None:
-            chart.append({"minute": int(minute * 60), "height": height})
+    for offset, data in tide_days.items():
+        for point in data.get("chart") or []:
+            if point.get("POINT_TYPE") != "hour":
+                continue
+            hour = numeric_or_none(point.get("TIDETIME"))
+            height = numeric_or_none(point.get("TIDEHEIGHT"))
+            if hour is not None and height is not None:
+                chart.append({"minute": offset * 1440 + int(hour * 60), "height": height})
     chart.sort(key=lambda x: x["minute"])
     level = None
     for index in range(1, len(chart)):
@@ -616,18 +617,50 @@ def notification_snapshot_provider(config):
             except Exception as exc:
                 errors.append(f"wave={repr(exc)}")
         tide_days = notification_data_cache["tide_days"]
+        tide_date = notification_data_cache["tide_date"]
         weather = notification_data_cache["weather"]
         wave = notification_data_cache["wave"]
-        fetched_times = [
-            notification_data_cache["tide_fetched_at"],
-            notification_data_cache["weather_fetched_at"],
-            notification_data_cache["wave_fetched_at"],
-        ]
-    if not tide_days or not weather or not wave:
-        raise RuntimeError("通知数据不完整：" + "; ".join(errors))
-    tide = _notification_tide_snapshot(tide_days)
+        fetched_at = {
+            "tide": notification_data_cache["tide_fetched_at"],
+            "weather": notification_data_cache["weather_fetched_at"],
+            "wave": notification_data_cache["wave_fetched_at"],
+        }
+    max_age = numeric_or_none(settings.get("max_data_age_minutes")) or 15
+    source_age_minutes = {
+        name: round(max(0, now_ts - fetched_time) / 60, 1) if fetched_time else None
+        for name, fetched_time in fetched_at.items()
+    }
+    tide_available = bool(tide_days) and tide_date == today
+    weather_available = bool(weather) and source_age_minutes["weather"] is not None and source_age_minutes["weather"] <= max_age
+    wave_available = bool(wave) and source_age_minutes["wave"] is not None and source_age_minutes["wave"] <= max_age
+    unavailable_sources = []
+    if not tide_available:
+        unavailable_sources.append("tide")
+    if not weather_available:
+        unavailable_sources.append("weather")
+    if not wave_available:
+        unavailable_sources.append("wave")
+
+    # 单个实时数据源异常时，只让依赖该数据的规则无法匹配；不要连带阻止
+    # 潮汐等其他数据仍然完整的规则。过期缓存会被置空，避免误触发。
+    tide = _notification_tide_snapshot(tide_days) if tide_available else {
+        "phase": None,
+        "phase_text": "--",
+        "progress": None,
+        "level_cm": None,
+        "segment_id": None,
+        "previous_extrema": None,
+        "next_extrema": None,
+    }
+    weather = weather if weather_available else {}
+    wave = wave if wave_available else {"height_m": None, "raw": "--"}
     shore_degree = settings.get("shore_inward_degree")
     degree = weather.get("degree")
+    realtime_ages = [
+        source_age_minutes[name]
+        for name in ("weather", "wave")
+        if source_age_minutes[name] is not None
+    ]
     snapshot = {
         "generated_at": _now().isoformat(timespec="seconds"),
         "site": {"name": settings.get("site_name", BEACH_NAME)},
@@ -642,13 +675,17 @@ def notification_snapshot_provider(config):
         },
         "wave": wave,
         "data": {
-            "age_minutes": round(max(0, now_ts - min(x for x in fetched_times if x)) / 60, 1),
+            # 潮汐表是按日期生效的预报数据，一天只需获取一次，不能用其下载时间
+            # 判断实时天气/浪高是否过期，否则每天凌晨后都会被错误拦截。
+            "age_minutes": max(realtime_ages) if realtime_ages else None,
+            "source_age_minutes": source_age_minutes,
+            "tide_table_date": tide_date,
+            "freshness_basis": ["weather", "wave"],
+            "unavailable_sources": unavailable_sources,
+            "status": "degraded" if unavailable_sources else "ok",
             "errors": errors,
         },
     }
-    max_age = numeric_or_none(settings.get("max_data_age_minutes")) or 15
-    if snapshot["data"]["age_minutes"] > max_age:
-        raise RuntimeError(f"通知数据已过期：{snapshot['data']['age_minutes']} 分钟")
     return snapshot
 
 
@@ -969,29 +1006,29 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                     cache["refresh"]["offshore_wave"] = now_hm(target_date)
                 self.write_json(json_payload(True, data, now_hm(target_date), f"青岛{'明日' if is_tomorrow else '今日'}近海浪高数据"))
             else:
-                cached_data = cache.get("offshore_wave_tomorrow") if is_tomorrow else cache.get("offshore_wave")
-                cached_time = cache["refresh"].get("offshore_wave_tomorrow", "--") if is_tomorrow else cache["refresh"].get("offshore_wave", "--")
                 if is_tomorrow:
                     self.write_json(json_payload(False, None, "--", "暂无明日近海浪高数据", tomorrow_unavailable=True))
                 else:
                     self.write_json(json_payload(
                         False,
-                        cached_data,
-                        cached_time,
-                        "近海浪高解析失败，展示缓存" if cached_data else "近海浪高解析失败",
+                        None,
+                        "--",
+                        "青岛近海浪高数据解析失败",
+                        error_code="PARSE_ERROR",
                     ))
         except Exception as e:
             print(f"【近海浪高】异常：{repr(e)}")
-            cached_data = cache.get("offshore_wave_tomorrow") if is_tomorrow else cache.get("offshore_wave")
-            cached_time = cache["refresh"].get("offshore_wave_tomorrow", "--") if is_tomorrow else cache["refresh"].get("offshore_wave", "--")
             if is_tomorrow:
                 self.write_json(json_payload(False, None, "--", "暂无明日近海浪高数据", tomorrow_unavailable=True))
             else:
+                error_code = getattr(e, "code", None) or "UPSTREAM_ERROR"
+                message = "青岛浪高接口返回 502" if error_code == 502 else "青岛浪高接口请求失败"
                 self.write_json(json_payload(
                     False,
-                    cached_data,
-                    cached_time,
-                    "近海浪高获取异常，展示缓存" if cached_data else "近海浪高获取异常",
+                    None,
+                    "--",
+                    message,
+                    error_code=error_code,
                 ))
 
     def handle_alarm(self):
