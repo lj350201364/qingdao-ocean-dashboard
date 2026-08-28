@@ -169,6 +169,32 @@ def render_message(template, snapshot):
     return re.sub(r"\{([^{}]+)\}", replace, str(template or ""))
 
 
+def canonical_tide_segment(snapshot):
+    """把新旧快照中的相对潮段统一成跨午夜稳定的绝对时间 ID。"""
+    tide = dotted_get(snapshot, "tide") or {}
+    previous = tide.get("previous_extrema") or {}
+    following = tide.get("next_extrema") or {}
+    generated_at = snapshot.get("generated_at") if isinstance(snapshot, dict) else None
+    try:
+        generated = datetime.datetime.fromisoformat(str(generated_at).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        generated = now_cn()
+
+    def endpoint(item):
+        time_match = re.fullmatch(r"(\d{1,2}):(\d{2})", str(item.get("time", "")).strip())
+        offset = numeric(item.get("offset"))
+        if not time_match or offset is None:
+            return None
+        date_value = generated.date() + datetime.timedelta(days=int(offset))
+        return f"{date_value.isoformat()}T{int(time_match.group(1)):02d}:{time_match.group(2)}"
+
+    previous_at = endpoint(previous)
+    following_at = endpoint(following)
+    if previous_at and following_at:
+        return f"{previous_at}->{following_at}"
+    return tide.get("segment_id")
+
+
 class NotificationManager:
     def __init__(self, config_path, db_path, snapshot_provider):
         self.config_path = config_path
@@ -340,7 +366,7 @@ class NotificationManager:
 
     def _build_event(self, rule, config, snapshot):
         dedupe = rule.get("deduplication", "per_tide_segment")
-        segment_id = dotted_get(snapshot, "tide.segment_id") or now_cn().strftime("%Y-%m-%d")
+        segment_id = canonical_tide_segment(snapshot) or now_cn().strftime("%Y-%m-%d")
         suffix = segment_id if dedupe == "per_tide_segment" else now_cn().strftime("%Y-%m-%d-%H")
         return {
             "event_key": f"{rule.get('id')}:{suffix}",
@@ -350,10 +376,27 @@ class NotificationManager:
             "roles": rule.get("roles") or [],
             "message": render_message(rule.get("message"), snapshot),
             "snapshot": snapshot,
+            "deduplication": dedupe,
         }
 
     def _create_event(self, event):
         with self._connect() as conn:
+            if event.get("deduplication") == "per_tide_segment":
+                # 兼容升级前已经写入数据库的相对 offset 潮段 ID，防止部署修复后
+                # 当前跨午夜潮段因 ID 格式变化再补发一次。
+                previous_events = conn.execute(
+                    "SELECT tide_segment_id,snapshot_json FROM notification_events WHERE rule_id=? ORDER BY id DESC LIMIT 50",
+                    (event["rule_id"],),
+                ).fetchall()
+                for previous_event in previous_events:
+                    if previous_event["tide_segment_id"] == event["segment_id"]:
+                        return False
+                    try:
+                        previous_snapshot = json.loads(previous_event["snapshot_json"])
+                    except (TypeError, ValueError, json.JSONDecodeError):
+                        continue
+                    if canonical_tide_segment(previous_snapshot) == event["segment_id"]:
+                        return False
             try:
                 conn.execute(
                     "INSERT INTO notification_events(event_key,rule_id,rule_name,tide_segment_id,roles,message,status,snapshot_json,created_at) VALUES(?,?,?,?,?,?,?,?,?)",

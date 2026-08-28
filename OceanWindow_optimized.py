@@ -574,8 +574,11 @@ def _notification_tide_snapshot(tide_days):
             ratio = (now_minute - left["minute"]) / max(1, right["minute"] - left["minute"])
             level = round(left["height"] + (right["height"] - left["height"]) * ratio)
             break
-    date_key = now.strftime("%Y-%m-%d")
-    segment_id = f"{date_key}:{previous['offset']}:{previous['time']}:{following['offset']}:{following['time']}"
+    previous_date = (now + datetime.timedelta(days=previous["offset"])).strftime("%Y-%m-%d")
+    following_date = (now + datetime.timedelta(days=following["offset"])).strftime("%Y-%m-%d")
+    # 使用潮段两端的绝对日期时间。相对日期 offset 会在午夜从 0/1 变成
+    # -1/0，导致同一潮段生成不同 ID 并重复通知。
+    segment_id = f"{previous_date}T{previous['time']}->{following_date}T{following['time']}"
     return {
         "phase": "rising" if rising else "falling",
         "phase_text": "涨潮中" if rising else "退潮中",
