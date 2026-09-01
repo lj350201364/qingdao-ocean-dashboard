@@ -389,7 +389,9 @@ function calcTideStatus(list){
   }
   if(selectedDayOffset===0&&lastTideRising!==null&&rising&&!lastTideRising&&soundEnabled){playRisingSound();}
   lastTideRising=rising;
+  var phaseAvailable=false;
   if(next){
+    phaseAvailable=true;
     if(prev&&prev.min<nowMin&&prev.min<next.min){
       var phaseTotal=Math.max(1,next.min-prev.min);
       var phaseProgress=Math.max(0,Math.min(100,Math.round((nowMin-prev.min)/phaseTotal*100)));
@@ -404,9 +406,11 @@ function calcTideStatus(list){
   }
   var waterBg=$("tideWaterBg");
   if(waterBg){
-    // 背景水位表达的是“本潮段已经完成的进度”，与涨退潮方向无关。
-    // 退潮 0% 也必须为空，不能按剩余潮位反向填满。
-    var waterHeight=phaseProgress||0;
+    // 背景水位表达实际潮位方向：涨潮随进度升高，退潮随进度降低。
+    // 明日预报或当前潮段不可计算时保持为空，避免无数据状态被误填满。
+    var waterHeight=selectedDayOffset===0&&phaseAvailable
+      ? (rising?(phaseProgress||0):100-(phaseProgress||0))
+      : 0;
     waterBg.style.height=waterHeight+"%";
   }
   var progressCell=waterBg?waterBg.closest(".tide-progress-cell"):null;
