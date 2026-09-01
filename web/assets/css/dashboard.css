@@ -590,3 +590,63 @@ html.performance-lite .alarm-modal-mask{backdrop-filter:none}
 html.page-paused *,html.page-paused *::before,html.page-paused *::after{animation-play-state:paused!important}
 html.mobile .performance-btn{display:none}
 @media(max-width:760px){.performance-btn{display:none}}
+
+/* Situation module tabs and sent-notification table. */
+.situation-title{overflow:visible}
+.situation-tabs{display:flex;align-items:center;gap:4px;min-width:0;padding:2px;background:rgba(1,10,21,.72);border:1px solid rgba(99,222,255,.13);border-radius:6px}
+.situation-tab{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:27px;padding:4px 10px;border:1px solid transparent;border-radius:4px;background:transparent;color:#7897a9;font-size:var(--fs-label);font-weight:700;letter-spacing:.02em;line-height:1;white-space:nowrap;cursor:pointer;transition:color .16s ease,background .16s ease,border-color .16s ease,transform .12s ease}
+.situation-tab:hover{color:var(--tech-text);background:rgba(25,217,255,.07)}
+.situation-tab:active{transform:translateY(1px)}
+.situation-tab:focus-visible,.notification-refresh:focus-visible{outline:2px solid var(--tech-cyan);outline-offset:2px}
+.situation-tab.active{color:#dffbff;background:rgba(25,217,255,.13);border-color:rgba(99,222,255,.28);box-shadow:inset 0 -1px 0 rgba(25,217,255,.45)}
+.notification-count{display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:18px;padding:0 5px;border-radius:4px;background:rgba(25,217,255,.1);color:#8beeff;font:700 10px/1 Consolas,"Microsoft YaHei",sans-serif}
+.situation-tab.active .notification-count{background:rgba(25,217,255,.2);color:#e7fcff}
+.situation-panels{position:relative;z-index:2;height:calc(100% - 42px);min-height:0}
+.situation-panel{height:100%;min-height:0}
+.situation-panel[hidden]{display:none!important}
+.map-card .situation-panel>.map-shell{height:100%}
+.notification-panel{display:flex;flex-direction:column;border:1px solid rgba(99,222,255,.16);border-radius:7px;background:linear-gradient(180deg,rgba(2,11,24,.92),rgba(3,13,27,.8));overflow:hidden}
+.notification-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:34px;padding:5px 9px;border-bottom:1px solid rgba(99,222,255,.12);color:#718fa0;font-size:clamp(10px,.7vw,12px);line-height:1.25}
+.notification-refresh{flex:0 0 auto;min-height:24px;padding:3px 9px;border:1px solid rgba(99,222,255,.2);border-radius:4px;background:rgba(25,217,255,.055);color:#8adff0;font-size:clamp(10px,.7vw,12px);font-weight:700;cursor:pointer;transition:color .16s ease,background .16s ease,border-color .16s ease,transform .12s ease}
+.notification-refresh:hover{color:#e8fcff;background:rgba(25,217,255,.11);border-color:rgba(99,222,255,.36)}
+.notification-refresh:active{transform:translateY(1px)}
+.notification-refresh:disabled{cursor:wait;opacity:.55}
+.notification-table-wrap{flex:1;min-height:0;overflow:auto}
+.notification-table{width:100%;height:auto;table-layout:fixed;border-collapse:collapse;background:transparent}
+.notification-table th,.notification-table td{border:0;border-bottom:1px solid rgba(99,222,255,.09);padding:7px 9px;text-align:left;font-size:clamp(10px,.72vw,13px);line-height:1.35;vertical-align:middle}
+.notification-table th{position:sticky;top:0;z-index:2;height:30px;background:#07182a;color:#79cfe0;font-weight:700;letter-spacing:.03em;box-shadow:0 1px 0 rgba(99,222,255,.12)}
+.notification-table th:nth-child(1){width:112px}.notification-table th:nth-child(2){width:24%}.notification-table th:nth-child(3){width:19%}
+.notification-table tr{animation:none!important;background:transparent;transition:background .15s ease}
+.notification-table tbody tr:hover{background:rgba(25,217,255,.045)}
+.notification-time{color:#8bb0c1;font:600 clamp(10px,.7vw,12px)/1.3 Consolas,"Microsoft YaHei",sans-serif;white-space:nowrap}
+.notification-rule strong{display:-webkit-box;overflow:hidden;color:#c9f7ff;font-weight:700;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2}
+.notification-roles{display:flex;flex-wrap:wrap;gap:3px;color:#8bb0c1}
+.notification-role{display:inline-flex;align-items:center;min-height:20px;padding:2px 6px;border:1px solid rgba(99,222,255,.15);border-radius:4px;background:rgba(25,217,255,.055);color:#8fd8e8;font-size:clamp(9px,.64vw,11px);font-weight:700;white-space:nowrap}
+.notification-message{color:#b3c8d3;word-break:break-word}
+.notification-message-text{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2}
+.notification-state{height:150px!important;text-align:center!important;color:#6f8b9a!important;font-weight:600!important;letter-spacing:.03em}
+.notification-state.is-empty{color:#7898a7!important}.notification-state.is-error{color:#ff8d9c!important}
+
+@media(max-width:1180px){
+  .situation-title .module-title-meta .module-source{display:none}
+  .situation-tab{padding-left:8px;padding-right:8px}
+}
+@media(max-width:640px){
+  html.mobile .map-card{min-height:500px}
+  .situation-title{align-items:flex-start;flex-wrap:wrap;gap:6px}
+  .situation-tabs{width:100%;order:1}
+  .situation-tab{flex:1;padding:5px 7px;font-size:11px}
+  .situation-title .module-title-meta{order:2;width:100%;justify-content:flex-end}
+  .situation-title .module-title-meta .module-source{display:block;max-width:none}
+  .situation-panels{height:calc(100% - 72px)}
+  .notification-toolbar{align-items:flex-start;font-size:10px}
+  .notification-table thead{display:none}
+  .notification-table,.notification-table tbody{display:block;width:100%}
+  .notification-table tbody tr{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin:7px;padding:8px;border:1px solid rgba(99,222,255,.11);border-radius:6px;background:rgba(4,16,30,.72)}
+  .notification-table tbody td{display:block;border:0;padding:0;font-size:11px;min-width:0}
+  .notification-table tbody td::before{content:attr(data-label);display:block;margin-bottom:3px;color:#557483;font-size:9px;font-weight:700}
+  .notification-table .notification-message{grid-column:1/-1}
+  .notification-table .notification-message-text{-webkit-line-clamp:3;line-clamp:3}
+  .notification-table .notification-state{display:flex;grid-column:1/-1;align-items:center;justify-content:center;height:170px!important}
+  .notification-table .notification-state::before{display:none}
+}

@@ -26,8 +26,8 @@ function cyclePerformanceMode(){
   if(tideChart){tideChart.dispose();tideChart=null;if(lastChartRaw)renderChart(lastChartRaw,"",lastChartSite);}
 }
 function runWhenVisible(fn){return function(){if(!document.hidden)fn();};}
-var dataLastRequested={tide:0,chart:0,weather:0,wave:0,offshore:0,alarms:0,typhoon:0};
-var dataRefreshIntervals={tide:60*60*1000,chart:6*60*60*1000,weather:10*60*1000,wave:60*60*1000,offshore:15*60*1000,alarms:5*60*1000,typhoon:60*60*1000};
+var dataLastRequested={tide:0,chart:0,weather:0,wave:0,offshore:0,alarms:0,typhoon:0,notifications:0};
+var dataRefreshIntervals={tide:60*60*1000,chart:6*60*60*1000,weather:10*60*1000,wave:60*60*1000,offshore:15*60*1000,alarms:5*60*1000,typhoon:60*60*1000,notifications:30*1000};
 function markDataRequest(name){dataLastRequested[name]=Date.now();}
 function dataRequestIsDue(name,now){return !dataLastRequested[name]||now-dataLastRequested[name]>=dataRefreshIntervals[name];}
 function refreshDueData(){
@@ -39,6 +39,7 @@ function refreshDueData(){
   if(dataRequestIsDue("offshore",now))loadOffshoreWave();
   if(dataRequestIsDue("alarms",now))loadCmaAlarm();
   if(dataRequestIsDue("typhoon",now))reloadTyphoonFrame();
+  if(dataRequestIsDue("notifications",now))loadNotificationLogs();
 }
 (function initPerformanceMode(){
   var query=(location.search.match(/[?&]performance=(auto|lite|standard)(?:&|$)/)||[])[1],saved="";
@@ -47,6 +48,7 @@ function refreshDueData(){
   document.addEventListener("visibilitychange",function(){document.documentElement.classList.toggle("page-paused",document.hidden);if(!document.hidden){updateClock();refreshDueData();}});
 })();
 var tideRawData=null, tideChart=null, lastChartRaw=null, lastChartSite=null, lastChartPoints=[], lastTideList=[], resizeTimer=null, lastTideRising=null, soundEnabled=false, audioCtx=null, selectedDayOffset=0, tomorrowTideList=[], tomorrowTideReady=false;
+var activeSituationPanel="typhoon",typhoonUpdatedAt="--",notificationUpdatedAt="--";
 var $=function(id){return document.getElementById(id);};
 function setText(id,text){var el=$(id); if(el) el.textContent=(text===null||text===undefined||text==="")?"--":text;}
 function setTextWithUnit(id,val,unit){var el=$(id); if(el){var v=(val===null||val===undefined||val==="")?"--":val; el.innerHTML=v+(unit?'<small>'+unit+'</small>':'');}}
@@ -156,8 +158,74 @@ function reloadTyphoonFrame(){
   if(!f)return;
   markDataRequest("typhoon");
   var now=new Date();
-  setText("typhoonTime","更新 "+String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0"));
+  typhoonUpdatedAt=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+  updateSituationMeta();
   f.src="https://www.bhyb.org.cn/typhoon/?t="+Date.now();
+}
+function updateSituationMeta(){
+  var showingNotifications=activeSituationPanel==="notifications";
+  setText("situationSource",showingNotifications?"数据源：钉钉通知引擎":"数据源：北海预报减灾中心");
+  setText("situationTime","更新 "+(showingNotifications?notificationUpdatedAt:typhoonUpdatedAt));
+}
+function switchSituationPanel(name){
+  activeSituationPanel=name==="notifications"?"notifications":"typhoon";
+  var showNotifications=activeSituationPanel==="notifications";
+  var typhoonPanel=$("typhoonPanel"),notificationPanel=$("notificationPanel");
+  var typhoonTab=$("typhoonTab"),notificationTab=$("notificationTab");
+  if(typhoonPanel){typhoonPanel.hidden=showNotifications;typhoonPanel.classList.toggle("active",!showNotifications);}
+  if(notificationPanel){notificationPanel.hidden=!showNotifications;notificationPanel.classList.toggle("active",showNotifications);}
+  if(typhoonTab){typhoonTab.classList.toggle("active",!showNotifications);typhoonTab.setAttribute("aria-selected",showNotifications?"false":"true");}
+  if(notificationTab){notificationTab.classList.toggle("active",showNotifications);notificationTab.setAttribute("aria-selected",showNotifications?"true":"false");}
+  updateSituationMeta();
+  if(showNotifications&&dataRequestIsDue("notifications",Date.now()))loadNotificationLogs();
+}
+function formatNotificationTime(value){
+  var text=String(value||"");
+  var match=text.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+  return match?{short:match[2]+"-"+match[3]+" "+match[4]+":"+match[5],full:match[1]+"-"+match[2]+"-"+match[3]+" "+match[4]+":"+match[5]+":"+(match[6]||"00")}:{short:"--",full:"--"};
+}
+function renderNotificationState(message,stateClass){
+  var body=$("notificationTableBody");
+  if(!body)return;
+  body.textContent="";
+  var row=document.createElement("tr"),cell=document.createElement("td");
+  cell.colSpan=4;cell.className="notification-state "+(stateClass||"");cell.textContent=message;
+  row.appendChild(cell);body.appendChild(row);
+}
+function renderNotificationLogs(items){
+  var body=$("notificationTableBody");
+  if(!body)return;
+  var rows=Array.isArray(items)?items.slice():[];
+  rows.sort(function(a,b){return String(b.sent_at||"").localeCompare(String(a.sent_at||""));});
+  setText("notificationCount",String(rows.length));
+  if(!rows.length){renderNotificationState("暂无已发送通知，规则成功触发后会显示在这里","is-empty");return;}
+  body.textContent="";
+  rows.forEach(function(item){
+    var row=document.createElement("tr");
+    var timeCell=document.createElement("td"),ruleCell=document.createElement("td"),roleCell=document.createElement("td"),messageCell=document.createElement("td");
+    var time=formatNotificationTime(item.sent_at);
+    timeCell.className="notification-time";timeCell.dataset.label="发送时间";timeCell.textContent=time.short;timeCell.title=time.full;
+    ruleCell.className="notification-rule";ruleCell.dataset.label="通知规则";
+    var ruleName=document.createElement("strong");ruleName.textContent=item.rule_name||"未命名规则";ruleCell.appendChild(ruleName);
+    roleCell.className="notification-roles";roleCell.dataset.label="通知角色";
+    var roles=Array.isArray(item.role_names)?item.role_names:[];
+    if(!roles.length){roleCell.textContent="--";}else{roles.forEach(function(role){var tag=document.createElement("span");tag.className="notification-role";tag.textContent=role;roleCell.appendChild(tag);});}
+    messageCell.className="notification-message";messageCell.dataset.label="通知内容";
+    var message=String(item.message||"--").replace(/\s+/g," ").trim();
+    var messageText=document.createElement("div");messageText.className="notification-message-text";messageText.textContent=message;messageCell.title=message;messageCell.appendChild(messageText);
+    row.appendChild(timeCell);row.appendChild(ruleCell);row.appendChild(roleCell);row.appendChild(messageCell);body.appendChild(row);
+  });
+}
+function loadNotificationLogs(force){
+  if(!force&&!dataRequestIsDue("notifications",Date.now()))return;
+  markDataRequest("notifications");
+  var btn=$("notificationRefreshBtn");
+  if(btn){btn.disabled=true;btn.textContent="读取中";}
+  fetchJSON("/api/notification/public-logs?limit=30",10000,function(e,r){
+    if(btn){btn.disabled=false;btn.textContent="刷新记录";}
+    if(e||!r||!r.success||!Array.isArray(r.data)){renderNotificationState("通知记录暂时无法读取，请稍后重试","is-error");return;}
+    notificationUpdatedAt=r.updateTime||"--";updateSituationMeta();renderNotificationLogs(r.data);
+  });
 }
 function formatHHMM(s){
   if(!s||s==="-")return "--";
@@ -891,7 +959,7 @@ function loadChart(){markDataRequest("chart");fetchJSON(apiUrl("/api/tideChart")
 function refreshAllData(){
   var btn=$("refreshBtn");
   if(btn){btn.disabled=true;btn.classList.add("is-loading");btn.textContent="↻ 刷新中";}
-  loadTide();loadChart();loadWeather();loadWave();loadOffshoreWave();loadCmaAlarm();
+  loadTide();loadChart();loadWeather();loadWave();loadOffshoreWave();loadCmaAlarm();loadNotificationLogs(true);
   setTimeout(function(){
     reloadTyphoonFrame();
     if(btn)btn.textContent="✓ 已更新";
@@ -908,9 +976,9 @@ function boot(){
   updatePerformanceButton();updateClock(); setInterval(runWhenVisible(updateClock),1000);
   updateDayButtons();
   markDataRequest("typhoon");
-  var typhoonNow=new Date();setText("typhoonTime","更新 "+String(typhoonNow.getHours()).padStart(2,"0")+":"+String(typhoonNow.getMinutes()).padStart(2,"0"));
-  loadTide(); loadChart(); loadWeather(); loadWave(); loadOffshoreWave(); loadCmaAlarm();
-  setInterval(runWhenVisible(loadTide),dataRefreshIntervals.tide); setInterval(runWhenVisible(loadChart),dataRefreshIntervals.chart); setInterval(runWhenVisible(loadWeather),dataRefreshIntervals.weather); setInterval(runWhenVisible(loadWave),dataRefreshIntervals.wave); setInterval(runWhenVisible(loadOffshoreWave),dataRefreshIntervals.offshore); setInterval(runWhenVisible(loadCmaAlarm),dataRefreshIntervals.alarms); setInterval(runWhenVisible(reloadTyphoonFrame),dataRefreshIntervals.typhoon);
+  var typhoonNow=new Date();typhoonUpdatedAt=String(typhoonNow.getHours()).padStart(2,"0")+":"+String(typhoonNow.getMinutes()).padStart(2,"0");updateSituationMeta();
+  loadTide(); loadChart(); loadWeather(); loadWave(); loadOffshoreWave(); loadCmaAlarm(); loadNotificationLogs(true);
+  setInterval(runWhenVisible(loadTide),dataRefreshIntervals.tide); setInterval(runWhenVisible(loadChart),dataRefreshIntervals.chart); setInterval(runWhenVisible(loadWeather),dataRefreshIntervals.weather); setInterval(runWhenVisible(loadWave),dataRefreshIntervals.wave); setInterval(runWhenVisible(loadOffshoreWave),dataRefreshIntervals.offshore); setInterval(runWhenVisible(loadCmaAlarm),dataRefreshIntervals.alarms); setInterval(runWhenVisible(reloadTyphoonFrame),dataRefreshIntervals.typhoon); setInterval(runWhenVisible(loadNotificationLogs),dataRefreshIntervals.notifications);
   setInterval(runWhenVisible(function(){if(lastTideList.length)calcTideStatus(lastTideList);}),60*1000);
   setTimeout(function(){if(lastChartRaw)renderChart(lastChartRaw,"",lastChartSite);},1000);
 }

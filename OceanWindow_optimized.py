@@ -741,6 +741,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             "/api/notification/status": self.handle_notification_status,
             "/api/notification/config": self.handle_notification_config,
             "/api/notification/logs": self.handle_notification_logs,
+            "/api/notification/public-logs": self.handle_notification_public_logs,
         }
         if path in routes:
             routes[path]()
@@ -814,6 +815,16 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             self.write_json(json_payload(True, notification_manager.logs(limit), now_hm(), "通知日志"))
         except Exception as exc:
             self.write_json(json_payload(False, None, "--", f"读取通知日志失败：{exc}"), status=500)
+
+    def handle_notification_public_logs(self):
+        if notification_manager is None:
+            self.write_json(json_payload(False, None, "--", "通知引擎未加载"), status=503)
+            return
+        try:
+            limit = self.query_param("limit") or "30"
+            self.write_json(json_payload(True, notification_manager.public_logs(limit), now_hm(), "已发送钉钉通知"))
+        except Exception as exc:
+            self.write_json(json_payload(False, None, "--", f"读取已发送通知失败：{exc}"), status=500)
 
     def handle_tide(self):
         target_date = self.query_date()

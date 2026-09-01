@@ -96,22 +96,41 @@
       <div class="quad quad-tr">
         <div class="card map-card">
           <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-          <div class="module-title">
-            <span>台风路径与云图</span>
-            <div class="module-title-meta"><small class="module-source">数据源：北海预报减灾中心</small><small id="typhoonTime" class="update-time">更新 --</small></div>
+          <div class="module-title situation-title">
+            <div class="situation-tabs" role="tablist" aria-label="态势模块内容切换">
+              <button id="typhoonTab" class="situation-tab active" type="button" role="tab" aria-selected="true" aria-controls="typhoonPanel" onclick="switchSituationPanel('typhoon')">台风路径与云图</button>
+              <button id="notificationTab" class="situation-tab" type="button" role="tab" aria-selected="false" aria-controls="notificationPanel" onclick="switchSituationPanel('notifications')">钉钉通知记录 <span id="notificationCount" class="notification-count">0</span></button>
+            </div>
+            <div class="module-title-meta"><small id="situationSource" class="module-source">数据源：北海预报减灾中心</small><small id="situationTime" class="update-time">更新 --</small></div>
           </div>
-          <div class="map-shell">
-            <iframe id="typhoonFrame" class="typhoon-frame" title="台风路径与云图" loading="eager" src="https://www.bhyb.org.cn/typhoon/"></iframe>
-            <span class="map-label n40">40°N</span>
-            <span class="map-label n30">30°N</span>
-            <span class="map-label n20">20°N</span>
-            <span class="map-label e125">125°E</span>
-            <span class="map-label e130">130°E</span>
-            <span class="map-label e135">135°E</span>
-            <a class="mobile-map-open" href="https://www.bhyb.org.cn/typhoon/" target="_blank" rel="noopener">手机端打开台风图</a>
-            <div class="map-actions">
-              <button class="btn" onclick="reloadTyphoonFrame()">刷新图层</button>
-              <a class="btn" href="https://www.bhyb.org.cn/typhoon/" target="_blank" rel="noopener">浏览器打开</a>
+          <div class="situation-panels">
+            <div id="typhoonPanel" class="situation-panel active" role="tabpanel" aria-labelledby="typhoonTab">
+              <div class="map-shell">
+                <iframe id="typhoonFrame" class="typhoon-frame" title="台风路径与云图" loading="eager" src="https://www.bhyb.org.cn/typhoon/"></iframe>
+                <span class="map-label n40">40°N</span>
+                <span class="map-label n30">30°N</span>
+                <span class="map-label n20">20°N</span>
+                <span class="map-label e125">125°E</span>
+                <span class="map-label e130">130°E</span>
+                <span class="map-label e135">135°E</span>
+                <a class="mobile-map-open" href="https://www.bhyb.org.cn/typhoon/" target="_blank" rel="noopener">手机端打开台风图</a>
+                <div class="map-actions">
+                  <button class="btn" onclick="reloadTyphoonFrame()">刷新图层</button>
+                  <a class="btn" href="https://www.bhyb.org.cn/typhoon/" target="_blank" rel="noopener">浏览器打开</a>
+                </div>
+              </div>
+            </div>
+            <div id="notificationPanel" class="situation-panel notification-panel" role="tabpanel" aria-labelledby="notificationTab" hidden>
+              <div class="notification-toolbar">
+                <span>仅展示发送成功的钉钉通知，最新记录优先</span>
+                <button id="notificationRefreshBtn" class="notification-refresh" type="button" onclick="loadNotificationLogs(true)">刷新记录</button>
+              </div>
+              <div class="notification-table-wrap">
+                <table class="notification-table" aria-label="已发送钉钉通知记录">
+                  <thead><tr><th>发送时间</th><th>通知规则</th><th>通知角色</th><th>通知内容</th></tr></thead>
+                  <tbody id="notificationTableBody"><tr><td class="notification-state" colspan="4">正在读取通知记录...</td></tr></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>

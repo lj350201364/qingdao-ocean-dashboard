@@ -303,6 +303,10 @@ class NotificationManager:
                     sent_at TEXT
                 )
             """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notification_events_status_sent_at
+                ON notification_events(status, sent_at DESC, id DESC)
+            """)
 
     def load_config(self):
         with open(self.config_path, "r", encoding="utf-8") as handle:
@@ -513,6 +517,43 @@ class NotificationManager:
         with contextlib.closing(self._connect()) as conn, conn:
             rows = conn.execute("SELECT * FROM notification_events ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [dict(row) for row in rows]
+
+    def public_logs(self, limit=30):
+        """返回大屏可展示的已发送通知，不暴露快照、错误和通道配置。"""
+        limit = max(1, min(100, int(limit)))
+        config = self.load_config()
+        role_config = config.get("roles") or {}
+        with contextlib.closing(self._connect()) as conn, conn:
+            rows = conn.execute(
+                """
+                SELECT rule_name,roles,message,status,created_at,sent_at
+                FROM notification_events
+                WHERE status='sent'
+                ORDER BY sent_at DESC,id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        result = []
+        for row in rows:
+            try:
+                role_ids = json.loads(row["roles"])
+            except (TypeError, ValueError, json.JSONDecodeError):
+                role_ids = []
+            if not isinstance(role_ids, list):
+                role_ids = []
+            role_names = [
+                str((role_config.get(str(role_id)) or {}).get("name") or role_id)
+                for role_id in role_ids
+            ]
+            result.append({
+                "sent_at": row["sent_at"] or row["created_at"],
+                "rule_name": row["rule_name"],
+                "role_names": role_names,
+                "message": row["message"],
+                "status": row["status"],
+            })
+        return result
 
     def public_config(self):
         config = self.load_config()
