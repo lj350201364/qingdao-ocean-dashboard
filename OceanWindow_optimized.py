@@ -535,9 +535,12 @@ def numeric_or_none(value):
     return float(match.group(0)) if match else None
 
 
-def _notification_tide_snapshot(tide_days):
-    now = _now()
-    now_minute = now.hour * 60 + now.minute
+def _notification_tide_snapshot(tide_days, tide_date, current=None):
+    """按潮汐缓存的基准日期计算，避免跨午夜时相对 offset 突然错位。"""
+    now = current or _now()
+    base_date = datetime.datetime.strptime(tide_date, "%Y-%m-%d").date()
+    day_offset = (now.date() - base_date).days
+    now_minute = day_offset * 1440 + now.hour * 60 + now.minute
     extrema = []
     for offset, data in tide_days.items():
         for item in data.get("extrema") or []:
@@ -574,8 +577,8 @@ def _notification_tide_snapshot(tide_days):
             ratio = (now_minute - left["minute"]) / max(1, right["minute"] - left["minute"])
             level = round(left["height"] + (right["height"] - left["height"]) * ratio)
             break
-    previous_date = (now + datetime.timedelta(days=previous["offset"])).strftime("%Y-%m-%d")
-    following_date = (now + datetime.timedelta(days=following["offset"])).strftime("%Y-%m-%d")
+    previous_date = (base_date + datetime.timedelta(days=previous["offset"])).isoformat()
+    following_date = (base_date + datetime.timedelta(days=following["offset"])).isoformat()
     # 使用潮段两端的绝对日期时间。相对日期 offset 会在午夜从 0/1 变成
     # -1/0，导致同一潮段生成不同 ID 并重复通知。
     segment_id = f"{previous_date}T{previous['time']}->{following_date}T{following['time']}"
@@ -646,7 +649,8 @@ def notification_snapshot_provider(config):
 
     # 单个实时数据源异常时，只让依赖该数据的规则无法匹配；不要连带阻止
     # 潮汐等其他数据仍然完整的规则。过期缓存会被置空，避免误触发。
-    tide = _notification_tide_snapshot(tide_days) if tide_available else {
+    snapshot_now = _now()
+    tide = _notification_tide_snapshot(tide_days, tide_date, snapshot_now) if tide_available else {
         "phase": None,
         "phase_text": "--",
         "progress": None,
@@ -665,7 +669,7 @@ def notification_snapshot_provider(config):
         if source_age_minutes[name] is not None
     ]
     snapshot = {
-        "generated_at": _now().isoformat(timespec="seconds"),
+        "generated_at": snapshot_now.isoformat(timespec="seconds"),
         "site": {"name": settings.get("site_name", BEACH_NAME)},
         "tide": tide,
         "wind": {

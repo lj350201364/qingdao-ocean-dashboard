@@ -3,3 +3,6 @@ notification_secrets.json
 ocean_notifications.db
 __pycache__/
 *.pyc
+钉钉通知配置说明.md
+前后端分离结构说明.md
+腾讯云服务器通知版部署说明.md

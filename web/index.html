@@ -19,7 +19,7 @@
         </svg>
       </span>
     </div>
-    <div class="topbar-title">栈桥浴场 · 实时监测大屏</div>
+    <div class="topbar-title">栈桥海水浴场 · 实时监测大屏</div>
     <div class="top-actions">
       <button id="todayBtn" class="day-btn active" type="button" aria-pressed="true" onclick="switchForecastDay(0)">今日</button>
       <button id="tomorrowBtn" class="day-btn" type="button" aria-pressed="false" onclick="switchForecastDay(1)">明日</button>
@@ -31,6 +31,7 @@
 
   <div class="cma-alarm-bar" id="cmaAlarmBar">
     <div class="cma-alarm-bar-label">气象预警</div>
+    <span class="cma-alarm-bar-source" title="数据源：国家预警发布中心、山东省气象台、青岛海洋预报台">数据源：国家 / 山东 / 青岛</span>
     <span class="cma-alarm-bar-time" id="cmaAlarmTime">更新 --</span>
     <div class="cma-alarm-marquee">
       <div class="cma-alarm-marquee-inner" id="cmaAlarmMarquee">
@@ -57,7 +58,10 @@
         </div>
         <div class="card weather-card" id="weatherCard">
           <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-          <div class="module-title"><span>实时天气与风况</span><small id="weatherTime">--</small></div>
+          <div class="module-title">
+            <span>实时天气与风况</span>
+            <div class="module-title-meta"><small class="module-source">数据源：Open-Meteo</small><small id="weatherTime" class="update-time">更新 --</small></div>
+          </div>
           <div class="weather-grid">
             <div class="weather-cell">
               <div class="weather-cell-inner">
@@ -92,7 +96,10 @@
       <div class="quad quad-tr">
         <div class="card map-card">
           <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-          <div class="module-title"><span>台风路径与云图</span><small>北海预报减灾中心</small></div>
+          <div class="module-title">
+            <span>台风路径与云图</span>
+            <div class="module-title-meta"><small class="module-source">数据源：北海预报减灾中心</small><small id="typhoonTime" class="update-time">更新 --</small></div>
+          </div>
           <div class="map-shell">
             <iframe id="typhoonFrame" class="typhoon-frame" title="台风路径与云图" loading="eager" src="https://www.bhyb.org.cn/typhoon/"></iframe>
             <span class="map-label n40">40°N</span>
@@ -104,7 +111,7 @@
             <a class="mobile-map-open" href="https://www.bhyb.org.cn/typhoon/" target="_blank" rel="noopener">手机端打开台风图</a>
             <div class="map-actions">
               <button class="btn" onclick="reloadTyphoonFrame()">刷新图层</button>
-              <a class="btn" href="https://www.bhyb.org.cn/typhoon/" target="_blank">浏览器打开</a>
+              <a class="btn" href="https://www.bhyb.org.cn/typhoon/" target="_blank" rel="noopener">浏览器打开</a>
             </div>
           </div>
         </div>
@@ -114,7 +121,10 @@
       <div class="quad quad-bl">
         <div class="card tide-card" id="tideCard">
           <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-          <div class="module-title"><span>海况数据</span><small id="tideUpdate">--</small></div>
+          <div class="module-title">
+            <span>海况数据</span>
+            <div class="module-title-meta"><small class="module-source" title="数据源：全球潮汐平台、青岛海洋预报台">数据源：全球潮汐 · 青岛海洋预报</small><small id="tideUpdate" class="update-time">更新 --</small></div>
+          </div>
           <div class="ocean-data-grid">
             <div class="ocean-row ocean-row-top">
               <div class="ocean-cell"><div class="label">近海浪高</div><strong id="offshoreWaveHeight" class="data-value">--</strong></div>
@@ -155,7 +165,10 @@
       <div class="quad quad-br">
         <div class="card chart-card" id="chartCard">
           <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-          <div class="module-title"><span id="chartTitle">青岛今日潮汐曲线</span><small id="chartSource">全球潮汐平台</small><small id="chartTime" class="update-time">--</small></div>
+          <div class="module-title">
+            <span id="chartTitle">青岛今日潮汐曲线</span>
+            <div class="module-title-meta"><small id="chartSource" class="module-source">数据源：全球潮汐平台</small><small id="chartTime" class="update-time">更新 --</small></div>
+          </div>
           <div id="tideChart">等待曲线数据</div>
         </div>
       </div>

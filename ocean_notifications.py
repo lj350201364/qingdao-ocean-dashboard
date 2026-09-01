@@ -1,5 +1,6 @@
 import datetime
 import base64
+import contextlib
 import hashlib
 import hmac
 import json
@@ -14,6 +15,7 @@ import urllib.request
 
 
 SHANGHAI_TZ = datetime.timezone(datetime.timedelta(hours=8))
+RULE_REPEAT_GUARD_SECONDS = 300
 
 
 def now_cn():
@@ -172,6 +174,14 @@ def render_message(template, snapshot):
 def canonical_tide_segment(snapshot):
     """把新旧快照中的相对潮段统一成跨午夜稳定的绝对时间 ID。"""
     tide = dotted_get(snapshot, "tide") or {}
+    segment_id = str(tide.get("segment_id") or "").strip()
+    # 新版快照已经携带绝对日期，直接信任它。旧版快照才需要通过
+    # generated_at + offset 还原，避免把正确 ID 再次算错。
+    if re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}->\d{4}-\d{2}-\d{2}T\d{2}:\d{2}",
+        segment_id,
+    ):
+        return segment_id
     previous = tide.get("previous_extrema") or {}
     following = tide.get("next_extrema") or {}
     generated_at = snapshot.get("generated_at") if isinstance(snapshot, dict) else None
@@ -192,7 +202,7 @@ def canonical_tide_segment(snapshot):
     following_at = endpoint(following)
     if previous_at and following_at:
         return f"{previous_at}->{following_at}"
-    return tide.get("segment_id")
+    return segment_id or None
 
 
 class NotificationManager:
@@ -275,7 +285,7 @@ class NotificationManager:
         return conn
 
     def _init_db(self):
-        with self._connect() as conn:
+        with contextlib.closing(self._connect()) as conn, conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS notification_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -380,7 +390,25 @@ class NotificationManager:
         }
 
     def _create_event(self, event):
-        with self._connect() as conn:
+        with contextlib.closing(self._connect()) as conn, conn:
+            # 将查询和写入串行化：即使将来误启动两个服务进程，也不会在同一
+            # 瞬间同时通过去重检查。另用 5 分钟窗口兜底拦截数据日期异常或
+            # 上游潮汐瞬时跳变造成的同规则重复提醒。
+            conn.execute("BEGIN IMMEDIATE")
+            recent_event = conn.execute(
+                "SELECT created_at FROM notification_events WHERE rule_id=? ORDER BY id DESC LIMIT 1",
+                (event["rule_id"],),
+            ).fetchone()
+            if recent_event:
+                try:
+                    created_at = datetime.datetime.fromisoformat(recent_event["created_at"])
+                    if created_at.tzinfo is None:
+                        created_at = created_at.replace(tzinfo=SHANGHAI_TZ)
+                    elapsed = (now_cn() - created_at.astimezone(SHANGHAI_TZ)).total_seconds()
+                    if 0 <= elapsed < RULE_REPEAT_GUARD_SECONDS:
+                        return False
+                except (TypeError, ValueError):
+                    pass
             if event.get("deduplication") == "per_tide_segment":
                 # 兼容升级前已经写入数据库的相对 offset 潮段 ID，防止部署修复后
                 # 当前跨午夜潮段因 ID 格式变化再补发一次。
@@ -474,7 +502,7 @@ class NotificationManager:
             raise RuntimeError(result.get("errmsg") or f"钉钉返回错误 {result.get('errcode')}")
 
     def _mark_event(self, event_key, status, error, attempts, sent=False):
-        with self._connect() as conn:
+        with contextlib.closing(self._connect()) as conn, conn:
             conn.execute(
                 "UPDATE notification_events SET status=?,error=?,attempts=?,sent_at=? WHERE event_key=?",
                 (status, error, attempts, now_cn().isoformat(timespec="seconds") if sent else None, event_key),
@@ -482,7 +510,7 @@ class NotificationManager:
 
     def logs(self, limit=50):
         limit = max(1, min(200, int(limit)))
-        with self._connect() as conn:
+        with contextlib.closing(self._connect()) as conn, conn:
             rows = conn.execute("SELECT * FROM notification_events ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [dict(row) for row in rows]
 

@@ -26,11 +26,25 @@ function cyclePerformanceMode(){
   if(tideChart){tideChart.dispose();tideChart=null;if(lastChartRaw)renderChart(lastChartRaw,"",lastChartSite);}
 }
 function runWhenVisible(fn){return function(){if(!document.hidden)fn();};}
+var dataLastRequested={tide:0,chart:0,weather:0,wave:0,offshore:0,alarms:0,typhoon:0};
+var dataRefreshIntervals={tide:60*60*1000,chart:6*60*60*1000,weather:10*60*1000,wave:60*60*1000,offshore:15*60*1000,alarms:5*60*1000,typhoon:60*60*1000};
+function markDataRequest(name){dataLastRequested[name]=Date.now();}
+function dataRequestIsDue(name,now){return !dataLastRequested[name]||now-dataLastRequested[name]>=dataRefreshIntervals[name];}
+function refreshDueData(){
+  var now=Date.now();
+  if(dataRequestIsDue("tide",now))loadTide();
+  if(dataRequestIsDue("chart",now))loadChart();
+  if(dataRequestIsDue("weather",now))loadWeather();
+  if(dataRequestIsDue("wave",now))loadWave();
+  if(dataRequestIsDue("offshore",now))loadOffshoreWave();
+  if(dataRequestIsDue("alarms",now))loadCmaAlarm();
+  if(dataRequestIsDue("typhoon",now))reloadTyphoonFrame();
+}
 (function initPerformanceMode(){
   var query=(location.search.match(/[?&]performance=(auto|lite|standard)(?:&|$)/)||[])[1],saved="";
   try{saved=localStorage.getItem("oceanPerformanceMode")||"";}catch(e){}
   applyPerformanceMode(query||saved||"auto",false);
-  document.addEventListener("visibilitychange",function(){document.documentElement.classList.toggle("page-paused",document.hidden);if(!document.hidden)updateClock();});
+  document.addEventListener("visibilitychange",function(){document.documentElement.classList.toggle("page-paused",document.hidden);if(!document.hidden){updateClock();refreshDueData();}});
 })();
 var tideRawData=null, tideChart=null, lastChartRaw=null, lastChartSite=null, lastChartPoints=[], lastTideList=[], resizeTimer=null, lastTideRising=null, soundEnabled=false, audioCtx=null, selectedDayOffset=0, tomorrowTideList=[], tomorrowTideReady=false;
 var $=function(id){return document.getElementById(id);};
@@ -138,7 +152,12 @@ function fetchJSON(url,timeout,cb){
   xhr.send();
 }
 function reloadTyphoonFrame(){
-  var f=$("typhoonFrame"); if(f) f.src="https://www.bhyb.org.cn/typhoon/?t="+Date.now();
+  var f=$("typhoonFrame");
+  if(!f)return;
+  markDataRequest("typhoon");
+  var now=new Date();
+  setText("typhoonTime","更新 "+String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0"));
+  f.src="https://www.bhyb.org.cn/typhoon/?t="+Date.now();
 }
 function formatHHMM(s){
   if(!s||s==="-")return "--";
@@ -385,12 +404,9 @@ function calcTideStatus(list){
   }
   var waterBg=$("tideWaterBg");
   if(waterBg){
-    var waterHeight=0;
-    if(rising){
-      waterHeight=phaseProgress||0;
-    }else{
-      waterHeight=100-(phaseProgress||0);
-    }
+    // 背景水位表达的是“本潮段已经完成的进度”，与涨退潮方向无关。
+    // 退潮 0% 也必须为空，不能按剩余潮位反向填满。
+    var waterHeight=phaseProgress||0;
     waterBg.style.height=waterHeight+"%";
   }
   var progressCell=waterBg?waterBg.closest(".tide-progress-cell"):null;
@@ -510,7 +526,7 @@ function renderChart(rawArr,msg,site){
   lastChartRaw=Array.isArray(rawArr)?rawArr:null; lastChartSite=site||null; var points=parseChartPoints(rawArr);
   lastChartPoints=points;
   if(lastTideList.length) calcTideStatus(lastTideList);
-  setText("chartSource",site&&site.code?site.name+"("+site.code+")":"全球潮汐平台");
+  setText("chartSource","数据源：全球潮汐平台"+(site&&site.code?" · "+site.name+"("+site.code+")":""));
   if(!points.length){$("tideChart").innerText=msg||"暂无实时曲线数据";return;}
   if(!initChart()){ $("tideChart").innerText="ECharts 加载中"; return; }
   var axisFont=adaptiveChartFont(14,11,18), markFont=adaptiveChartFont(13,10,16), nameFont=adaptiveChartFont(15,12,19);
@@ -610,8 +626,8 @@ function showChartUnavailable(){
   setText("chartTime","暂无明日数据");
   var tc=$("tideChart"); if(tc) tc.innerHTML='<div class="module-unavailable">暂无明日数据</div>';
 }
-function loadWeather(){fetchJSON(apiUrl("/api/weather"),20000,function(e,r){if(r&&r.tomorrow_unavailable){showWeatherUnavailable();return;}if(r&&r.data)renderWeather(r.data,r.updateTime);});}
-function loadWave(){fetchJSON(apiUrl("/api/wave"),20000,function(e,r){if(r&&r.tomorrow_unavailable){showWaveUnavailable();return;}if(r&&r.data)renderWave(r.data,r.updateTime);});}
+function loadWeather(){markDataRequest("weather");fetchJSON(apiUrl("/api/weather"),20000,function(e,r){if(r&&r.tomorrow_unavailable){showWeatherUnavailable();return;}if(r&&r.data)renderWeather(r.data,r.updateTime);});}
+function loadWave(){markDataRequest("wave");fetchJSON(apiUrl("/api/wave"),20000,function(e,r){if(r&&r.tomorrow_unavailable){showWaveUnavailable();return;}if(r&&r.data)renderWave(r.data,r.updateTime);});}
 function setOffshoreWaveState(text,isError,detail){
   var el=$("offshoreWaveHeight");
   if(!el)return;
@@ -620,7 +636,7 @@ function setOffshoreWaveState(text,isError,detail){
   el.title=detail||"";
   el.setAttribute("aria-label",detail||("近海浪高 "+(text||"--")));
 }
-function loadOffshoreWave(){fetchJSON(apiUrl("/api/offshore_wave"),20000,function(e,r){
+function loadOffshoreWave(){markDataRequest("offshore");fetchJSON(apiUrl("/api/offshore_wave"),20000,function(e,r){
   if(e||!r){setOffshoreWaveState("请求失败",true,"无法连接青岛浪高接口");return;}
   if(!r.success||!r.data){
     var label=String(r.error_code)==="502"?"502 异常":"接口异常";
@@ -630,44 +646,6 @@ function loadOffshoreWave(){fetchJSON(apiUrl("/api/offshore_wave"),20000,functio
   setOffshoreWaveState(r.data.wave_height||"--",false,"青岛近海浪高");
 });}
 function loadAlarm(){fetchJSON(apiUrl("/api/alarm"),20000,function(e,r){});}
-function loadSdAlarm(){fetchJSON("/api/sd_alarm",45000,function(e,r){
-  var listCard=$("alarmListCard");var container=$("alarmListContainer");var timeEl=$("alarmListTime");
-  if(!r||e||!r.data||!Array.isArray(r.data)||r.data.length===0){
-    if(container)container.innerHTML='<div class="alarm-list-empty">暂无预警信息</div>';
-    if(timeEl)timeEl.textContent=r&&r.updateTime?r.updateTime:"--";
-    return;
-  }
-  // 列表形式展示
-  var html="";
-  for(var i=0;i<r.data.length;i++){
-    var item=r.data[i];
-    var levelCls="blue";
-    var levelText="蓝色";
-    var lv=(item.level||"")+(item.title||"");
-    if(lv.indexOf("红色")>=0){levelCls="red";levelText="红色";}
-    else if(lv.indexOf("橙色")>=0){levelCls="orange";levelText="橙色";}
-    else if(lv.indexOf("黄色")>=0){levelCls="yellow";levelText="黄色";}
-    var type=item.type||"气象预警";
-    var title=item.title||"--";
-    var pubTime=item.publish_time||"--";
-    var idx=i;
-    html+='<div class="alarm-list-item item-'+levelCls+'" onclick="openAlarmModal('+idx+')">';
-    html+='<span class="alarm-level-tag '+levelCls+'">'+levelText+'</span>';
-    html+='<div class="alarm-item-body">';
-    html+='<div class="alarm-item-title">'+title+'</div>';
-    html+='<div class="alarm-item-meta">';
-    html+='<span class="alarm-item-type">'+type+'</span>';
-    html+='<span class="alarm-item-time">'+pubTime+'</span>';
-    html+='</div>';
-    html+='</div>';
-    html+='</div>';
-  }
-  if(container)container.innerHTML=html;
-  if(timeEl)timeEl.textContent=r.updateTime||"--";
-  // 缓存数据供弹窗使用
-  window._alarmData=r.data;
-});}
-
 // 统一格式化预警时间为 YYYY-MM-DD HH:MM
 function formatAlarmTime(t){
   if(!t||t==="--")return "";
@@ -690,6 +668,7 @@ function formatAlarmTime(t){
 }
 
 function loadCmaAlarm(){
+  markDataRequest("alarms");
   var marquee=$("cmaAlarmMarquee");
   var bar=$("cmaAlarmBar");
   var timeEl=$("cmaAlarmTime");
@@ -871,52 +850,6 @@ function openCmaAlarmModal(index){
   }
 }
 
-var _alarmData=[];
-function openAlarmModal(index){
-  var data=window._alarmData||[];
-  var item=data[index];
-  if(!item){return;}
-  var modal=$("alarmModal");
-  if(!modal){return;}
-  modal.style.display="flex";
-  $("alarmModalTitle").textContent=item.title||"预警详情";
-  $("alarmModalTime").textContent=formatAlarmTime(item.publish_time)||"--";
-  _currentAlarmUrl=item.url||"";
-  var sdLinkEl=$("alarmModalLink");
-  if(item.url){
-    sdLinkEl.href=item.url;
-    sdLinkEl.target="_blank";
-    sdLinkEl.rel="noopener noreferrer";
-    sdLinkEl.classList.remove("disabled");
-  }else{
-    sdLinkEl.href="javascript:void(0)";
-    sdLinkEl.classList.add("disabled");
-  }
-  $("alarmModalBody").innerHTML='<div class="alarm-modal-loading">加载中...</div>';
-  // 获取详情内容
-  var url="/api/sd_alarm_detail?url="+encodeURIComponent(item.url||"");
-  fetchJSON(url,15000,function(e,r){
-    if(!r||e||!r.data){
-      $("alarmModalBody").innerHTML='<div style="text-align:center;color:rgba(232,234,246,.5);padding:20px 0;">加载失败，请点击"查看原文"查看</div>';
-      return;
-    }
-    var content=r.data.content||"暂无详情内容";
-    // 将换行转换为段落
-    var paragraphs=content.split(/\n\s*\n/).filter(function(p){return p.trim().length>0;});
-    var html="";
-    for(var i=0;i<paragraphs.length;i++){
-      html+="<p>"+paragraphs[i].replace(/\n/g,"<br>")+"</p>";
-    }
-    if(r.data.title&&r.data.title!==item.title){
-      $("alarmModalTitle").textContent=r.data.title;
-    }
-    if(r.data.pub_time&&r.data.pub_time!=="--"){
-      $("alarmModalTime").textContent=formatAlarmTime(r.data.pub_time);
-    }
-    $("alarmModalBody").innerHTML=html;
-  });
-}
-
 function closeAlarmModal(){
   var modal=$("alarmModal");
   if(modal){modal.style.display="none";}
@@ -933,7 +866,7 @@ function openAlarmOriginal(){
 document.addEventListener("keydown",function(e){
   if(e.key==="Escape"){closeAlarmModal();}
 });
-function loadTide(){fetchJSON(apiUrl("/api/tide"),20000,function(e,r){if(!r||e)return;if(r&&r.tomorrow_unavailable){showTideUnavailable();return;}if(r&&r.data)renderTide(r,r.updateTime);});
+function loadTide(){markDataRequest("tide");fetchJSON(apiUrl("/api/tide"),20000,function(e,r){if(!r||e)return;if(r&&r.tomorrow_unavailable){showTideUnavailable();return;}if(r&&r.data)renderTide(r,r.updateTime);});
   // 预加载明日潮汐数据，用于计算次日高低潮
   if(selectedDayOffset===0){
     var tomorrowUrl="/api/tide?date="+(function(){var d=new Date();d.setDate(d.getDate()+1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");})();
@@ -950,7 +883,7 @@ function loadTide(){fetchJSON(apiUrl("/api/tide"),20000,function(e,r){if(!r||e)r
     });
   }
 }
-function loadChart(){fetchJSON(apiUrl("/api/tideChart"),20000,function(e,r){if(!r||e){renderChart([],"潮汐曲线加载失败",null);return;}if(r&&r.tomorrow_unavailable){showChartUnavailable();return;}setText("chartTime","更新 "+(r.updateTime||"--"));renderChart(r.chart,r.msg,r.site);});}
+function loadChart(){markDataRequest("chart");fetchJSON(apiUrl("/api/tideChart"),20000,function(e,r){if(!r||e){renderChart([],"潮汐曲线加载失败",null);return;}if(r&&r.tomorrow_unavailable){showChartUnavailable();return;}setText("chartTime","更新 "+(r.updateTime||"--"));renderChart(r.chart,r.msg,r.site);});}
 function refreshAllData(){
   var btn=$("refreshBtn");
   if(btn){btn.disabled=true;btn.classList.add("is-loading");btn.textContent="↻ 刷新中";}
@@ -970,8 +903,10 @@ function boot(){
   if(isMobile){document.documentElement.className+=" mobile";}
   updatePerformanceButton();updateClock(); setInterval(runWhenVisible(updateClock),1000);
   updateDayButtons();
-  loadTide(); loadChart(); loadWeather(); loadWave(); loadOffshoreWave(); loadCmaAlarm(); loadSdAlarm();
-  setInterval(runWhenVisible(loadTide),60*60*1000); setInterval(runWhenVisible(loadChart),6*60*60*1000); setInterval(runWhenVisible(loadWeather),10*60*1000); setInterval(runWhenVisible(loadWave),60*60*1000); setInterval(runWhenVisible(loadOffshoreWave),60*60*1000); setInterval(runWhenVisible(loadCmaAlarm),5*60*1000); setInterval(runWhenVisible(loadSdAlarm),5*60*1000);
+  markDataRequest("typhoon");
+  var typhoonNow=new Date();setText("typhoonTime","更新 "+String(typhoonNow.getHours()).padStart(2,"0")+":"+String(typhoonNow.getMinutes()).padStart(2,"0"));
+  loadTide(); loadChart(); loadWeather(); loadWave(); loadOffshoreWave(); loadCmaAlarm();
+  setInterval(runWhenVisible(loadTide),dataRefreshIntervals.tide); setInterval(runWhenVisible(loadChart),dataRefreshIntervals.chart); setInterval(runWhenVisible(loadWeather),dataRefreshIntervals.weather); setInterval(runWhenVisible(loadWave),dataRefreshIntervals.wave); setInterval(runWhenVisible(loadOffshoreWave),dataRefreshIntervals.offshore); setInterval(runWhenVisible(loadCmaAlarm),dataRefreshIntervals.alarms); setInterval(runWhenVisible(reloadTyphoonFrame),dataRefreshIntervals.typhoon);
   setInterval(runWhenVisible(function(){if(lastTideList.length)calcTideStatus(lastTideList);}),60*1000);
   setTimeout(function(){if(lastChartRaw)renderChart(lastChartRaw,"",lastChartSite);},1000);
 }
