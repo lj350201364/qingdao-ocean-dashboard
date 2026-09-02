@@ -43,6 +43,16 @@ GLOBAL_TIDE_SITE_NAME = "青岛"
 WEATHER_LATITUDE = 36.061
 WEATHER_LONGITUDE = 120.326
 
+# 晚霞评分除栈桥本地外，还采样日落方向约 75 至 160 公里的云层。
+# 远处低云会先遮断夕阳，即使本地上空仍有漂亮的中高云，也可能看不到晚霞。
+SUNSET_SAMPLE_POINTS = [
+    ("site", WEATHER_LATITUDE, WEATHER_LONGITUDE),
+    ("west_near", 36.061, 119.490),
+    ("west_far", 36.061, 118.660),
+    ("west_south", 35.700, 119.220),
+    ("west_north", 36.420, 119.220),
+]
+
 server = None
 notification_manager = None
 notification_cache_lock = threading.RLock()
@@ -51,9 +61,12 @@ notification_data_cache = {
     "tide_days": None,
     "tide_fetched_at": 0,
     "weather": None,
+    "fishing": {},
     "weather_fetched_at": 0,
     "wave": None,
     "wave_fetched_at": 0,
+    "fishing": None,
+    "fishing_fetched_at": 0,
 }
 
 cache = {
@@ -73,6 +86,7 @@ cache = {
         "offshore_wave": "--",
         "offshore_wave_tomorrow": "--",
         "weather": "--",
+        "fishing": {},
         "alarm": "--",
         "sd_alarm": "--",
         "cma_alarm": "--",
@@ -489,10 +503,15 @@ def weather_code_text(code):
 
 
 def _notification_fetch_weather():
+    latitudes = ",".join(str(point[1]) for point in SUNSET_SAMPLE_POINTS)
+    longitudes = ",".join(str(point[2]) for point in SUNSET_SAMPLE_POINTS)
     params = urllib.parse.urlencode({
-        "latitude": WEATHER_LATITUDE,
-        "longitude": WEATHER_LONGITUDE,
+        "latitude": latitudes,
+        "longitude": longitudes,
         "current": "wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+        "hourly": "relative_humidity_2m,precipitation_probability,weather_code,cloud_cover_low,cloud_cover_mid,cloud_cover_high,visibility",
+        "daily": "sunset",
+        "forecast_days": 2,
         "timezone": "Asia/Shanghai",
     })
     raw = fetch_json(
@@ -500,12 +519,357 @@ def _notification_fetch_weather():
         headers={"User-Agent": "OceanWindow-NotificationEngine/1.0", "Accept": "application/json"},
         timeout=18,
     )
-    current = raw.get("current") or {}
+    datasets = raw if isinstance(raw, list) else [raw]
+    local = datasets[0] if datasets and isinstance(datasets[0], dict) else {}
+    current = local.get("current") or {}
     return {
         "degree": numeric_or_none(current.get("wind_direction_10m")),
         "speed_kmh": numeric_or_none(current.get("wind_speed_10m")),
         "gust_kmh": numeric_or_none(current.get("wind_gusts_10m")),
         "source_time": current.get("time", "--"),
+        "sunset": _calculate_sunset_forecast(local, datasets[1:], _now()),
+    }
+
+
+def _parse_local_datetime(value):
+    try:
+        parsed = datetime.datetime.fromisoformat(str(value))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=_tz())
+    except (TypeError, ValueError):
+        return None
+
+
+def _nearest_hour_value(dataset, target, field):
+    hourly = dataset.get("hourly") or {}
+    times = hourly.get("time") or []
+    values = hourly.get(field) or []
+    best = None
+    for index, raw_time in enumerate(times):
+        when = _parse_local_datetime(raw_time)
+        if when is None or index >= len(values):
+            continue
+        distance = abs((when - target).total_seconds())
+        if best is None or distance < best[0]:
+            best = (distance, numeric_or_none(values[index]))
+    return best[1] if best else None
+
+
+def _mean_available(values):
+    available = [float(value) for value in values if value is not None]
+    return sum(available) / len(available) if available else None
+
+
+def _clamp(value, low, high):
+    return max(low, min(high, value))
+
+
+def _calculate_sunset_forecast(local, western_datasets, current):
+    daily = local.get("daily") or {}
+    sunset_values = daily.get("sunset") or []
+    sunset_at = next(
+        (parsed for parsed in (_parse_local_datetime(value) for value in sunset_values)
+         if parsed and parsed.date() == current.date()),
+        None,
+    )
+    if sunset_at is None:
+        return {
+            "score": None, "level": "unknown", "level_text": "数据不足",
+            "window": "outside", "window_text": "非通知时段", "reason": "未取得今日日落预报",
+        }
+
+    low_local = _nearest_hour_value(local, sunset_at, "cloud_cover_low")
+    low_west = _mean_available(
+        [_nearest_hour_value(dataset, sunset_at, "cloud_cover_low") for dataset in western_datasets]
+    )
+    low_west_before = _mean_available([
+        _nearest_hour_value(dataset, sunset_at - datetime.timedelta(hours=2), "cloud_cover_low")
+        for dataset in western_datasets
+    ])
+    mid_cloud = _nearest_hour_value(local, sunset_at, "cloud_cover_mid")
+    high_cloud = _nearest_hour_value(local, sunset_at, "cloud_cover_high")
+    visibility_m = _nearest_hour_value(local, sunset_at, "visibility")
+    humidity = _nearest_hour_value(local, sunset_at, "relative_humidity_2m")
+    precipitation = _nearest_hour_value(local, sunset_at, "precipitation_probability")
+    weather_code = _nearest_hour_value(local, sunset_at, "weather_code")
+
+    required = (low_local, low_west, mid_cloud, high_cloud, visibility_m, humidity, precipitation)
+    if any(value is None for value in required):
+        return {
+            "score": None, "level": "unknown", "level_text": "数据不足",
+            "window": "outside", "window_text": "非通知时段", "sunset_time": sunset_at.strftime("%H:%M"),
+            "minutes_until": round((sunset_at - current).total_seconds() / 60),
+            "reason": "分层云量或能见度预报不完整",
+        }
+
+    # 35 分：日落方向低云透光通道。本地低云占 40%，西侧路径低云占 60%。
+    corridor_low = low_local * 0.4 + low_west * 0.6
+    corridor_score = 35 * _clamp((70 - corridor_low) / 60, 0, 1)
+
+    # 30 分：本地中高云幕布。云量约 30% 至 80% 时最有利，过少缺乏层次，过厚会遮光。
+    canvas_cloud = max(mid_cloud, high_cloud)
+    if canvas_cloud < 15:
+        canvas_score = canvas_cloud / 15 * 12
+    elif canvas_cloud < 30:
+        canvas_score = 12 + (canvas_cloud - 15) / 15 * 18
+    elif canvas_cloud <= 80:
+        canvas_score = 30
+    else:
+        canvas_score = max(8, 30 - (canvas_cloud - 80) * 1.1)
+
+    # 15 分：大气通透度。能见度和近地湿度分别计分。
+    visibility_km = visibility_m / 1000
+    visibility_score = 10 * _clamp((visibility_km - 5) / 10, 0, 1)
+    humidity_score = 5 * _clamp((95 - humidity) / 20, 0, 1)
+
+    # 10 分：日落时段无明显降水或雾。天气代码 45/48 为雾，51 以上为降水天气。
+    if precipitation <= 10:
+        precipitation_score = 10
+    elif precipitation <= 30:
+        precipitation_score = 7
+    elif precipitation <= 50:
+        precipitation_score = 3
+    else:
+        precipitation_score = 0
+    if weather_code is not None and (weather_code in (45, 48) or weather_code >= 51):
+        precipitation_score = min(precipitation_score, 2)
+
+    # 10 分：西侧低云趋势。日落前两小时到日落时减少最有利。
+    if low_west_before is None:
+        trend_score = 5
+    else:
+        cloud_change = low_west - low_west_before
+        if cloud_change <= -5:
+            trend_score = 10
+        elif low_west <= 40 and cloud_change <= 5:
+            trend_score = 8
+        elif cloud_change < 15:
+            trend_score = 5
+        else:
+            trend_score = 0
+
+    components = {
+        "light_corridor": round(corridor_score),
+        "cloud_canvas": round(canvas_score),
+        "transparency": round(visibility_score + humidity_score),
+        "precipitation": round(precipitation_score),
+        "cloud_trend": round(trend_score),
+    }
+    score = int(_clamp(round(sum(components.values())), 0, 100))
+    level = "high" if score >= 70 else "medium" if score >= 45 else "low"
+    level_text = {"high": "较高", "medium": "有一定概率", "low": "较低"}[level]
+    minutes_until = round((sunset_at - current).total_seconds() / 60)
+    if 120 <= minutes_until <= 180:
+        window, window_text = "early", "日落前2至3小时"
+    elif 30 <= minutes_until <= 60:
+        window, window_text = "final", "日落前30至60分钟"
+    elif 0 <= minutes_until < 30:
+        window, window_text = "near", "日落前30分钟内"
+    elif -20 <= minutes_until < 0:
+        window, window_text = "afterglow", "日落后20分钟内"
+    else:
+        window, window_text = "outside", "非建议通知时段"
+    reason = (
+        f"西侧低云{round(low_west)}%，本地中高云{round(canvas_cloud)}%，"
+        f"能见度{visibility_km:.1f}公里，湿度{round(humidity)}%，降水概率{round(precipitation)}%"
+    )
+    return {
+        "score": score,
+        "level": level,
+        "level_text": level_text,
+        "window": window,
+        "window_text": window_text,
+        "sunset_time": sunset_at.strftime("%H:%M"),
+        "minutes_until": minutes_until,
+        "reason": reason,
+        "horizon_low_cloud_pct": round(low_west),
+        "canvas_cloud_pct": round(canvas_cloud),
+        "visibility_km": round(visibility_km, 1),
+        "humidity_pct": round(humidity),
+        "precipitation_probability": round(precipitation),
+        "components": components,
+        "sample_count": len([dataset for dataset in western_datasets if dataset]),
+        "method_version": 1,
+    }
+
+
+def _cached_notification_weather(now_ts=None):
+    """获取天气与晚霞共用缓存，避免大屏和通知引擎重复请求多点预报。"""
+    now_ts = now_ts or time.time()
+    refresh_error = None
+    with notification_cache_lock:
+        if now_ts - notification_data_cache["weather_fetched_at"] >= 600 or not notification_data_cache["weather"]:
+            try:
+                notification_data_cache["weather"] = _notification_fetch_weather()
+                notification_data_cache["weather_fetched_at"] = now_ts
+            except Exception as exc:
+                refresh_error = exc
+        return (
+            notification_data_cache["weather"],
+            notification_data_cache["weather_fetched_at"],
+            refresh_error,
+        )
+
+
+def _score_fishing_hour(moment, tide_delta, wind_speed, gust_speed, wave_height,
+                        precipitation, weather_code, sunrise, sunset):
+    """计算岸钓辅助评分；水温因鱼种而异，仅展示，不纳入通用评分。"""
+    tide_delta = abs(tide_delta or 0)
+    tide_score = 30 if tide_delta >= 25 else 25 if tide_delta >= 15 else 18 if tide_delta >= 8 else 10 if tide_delta >= 3 else 4
+    wind_speed = wind_speed if wind_speed is not None else 99
+    gust_speed = gust_speed if gust_speed is not None else wind_speed
+    effective_wind = max(wind_speed, gust_speed * 0.72)
+    wind_score = 25 if effective_wind <= 12 else 20 if effective_wind <= 20 else 13 if effective_wind <= 28 else 6 if effective_wind <= 38 else 0
+    wave_score = 0 if wave_height is None else 20 if wave_height <= 0.6 else 16 if wave_height <= 1.0 else 8 if wave_height <= 1.5 else 0
+    precipitation = precipitation if precipitation is not None else 100
+    thunder = weather_code in (95, 96, 99)
+    rain_score = 0 if thunder else 15 if precipitation <= 10 else 11 if precipitation <= 30 else 6 if precipitation <= 50 else 2
+    light_score = 2
+    if sunrise and sunset:
+        if (sunrise - datetime.timedelta(minutes=30) <= moment <= sunrise + datetime.timedelta(minutes=90)
+                or sunset - datetime.timedelta(minutes=90) <= moment <= sunset + datetime.timedelta(minutes=15)):
+            light_score = 10
+        elif sunrise <= moment <= sunset:
+            light_score = 6
+    components = {"tide": tide_score, "wind": wind_score, "wave": wave_score, "rain": rain_score, "light": light_score}
+    safety, safety_text, cap = "normal", "常规防滑防浪，留意现场变化", 100
+    if thunder or effective_wind > 38 or (wave_height is not None and wave_height > 1.5):
+        safety, cap = "unsafe", 35
+        safety_text = "存在雷暴、强风或较大浪风险，不建议岸钓"
+    elif wave_height is None:
+        safety, cap = "unknown", 45
+        safety_text = "浪高数据缺失，无法完成安全判断"
+    elif effective_wind > 28 or wave_height > 1.0:
+        safety, cap = "caution", 55
+        safety_text = "风浪偏强，仅供观察，靠岸作业需谨慎"
+    score = int(min(sum(components.values()), cap))
+    level = "很适合" if score >= 80 else "适合" if score >= 65 else "一般" if score >= 50 else "不建议"
+    return score, level, safety, safety_text, components
+
+
+def _fishing_tide_points(target_date):
+    base_date = datetime.datetime.strptime(target_date, "%Y-%m-%d").date()
+    points, source_time = [], "--"
+    for offset in (0, 1):
+        day = (base_date + datetime.timedelta(days=offset)).isoformat()
+        data = fetch_qingdao_tide_data(day)
+        source_time = data.get("sourceTime") or source_time
+        for item in data.get("chart") or []:
+            if item.get("POINT_TYPE") != "hour":
+                continue
+            hour = numeric_or_none(item.get("TIDETIME"))
+            height = numeric_or_none(item.get("TIDEHEIGHT"))
+            if hour is None or height is None:
+                continue
+            moment = datetime.datetime.combine(base_date + datetime.timedelta(days=offset), datetime.time(int(hour), tzinfo=_tz()))
+            points.append((moment, height))
+    return sorted(points, key=lambda item: item[0]), source_time
+
+
+def fetch_fishing_forecast(target_date=None):
+    """生成所选日期起未来24小时的岸钓辅助评分。"""
+    target_date = normalize_date(target_date)
+    params = urllib.parse.urlencode({
+        "latitude": WEATHER_LATITUDE,
+        "longitude": WEATHER_LONGITUDE,
+        "hourly": "temperature_2m,precipitation_probability,weather_code,wind_speed_10m,wind_gusts_10m",
+        "daily": "sunrise,sunset",
+        "forecast_days": 3,
+        "timezone": "Asia/Shanghai",
+    })
+    weather_raw = fetch_json(f"https://api.open-meteo.com/v1/forecast?{params}", headers={"User-Agent": "OceanWindow-FishingScore/1.0", "Accept": "application/json"}, timeout=18)
+    hourly, daily = weather_raw.get("hourly") or {}, weather_raw.get("daily") or {}
+    tide_points, tide_source_time = _fishing_tide_points(target_date)
+    if len(tide_points) < 2:
+        raise ValueError("潮汐小时数据不足，无法计算钓鱼评分")
+    wave, wave_error = None, ""
+    try:
+        wave = _notification_fetch_wave()
+    except Exception as exc:
+        wave_error = str(exc)
+    wave_height = numeric_or_none((wave or {}).get("height_m"))
+    cached_beach = cache.get("wave") or {}
+    water_temp = numeric_or_none(cached_beach.get("water_temp")) if isinstance(cached_beach, dict) else None
+    if water_temp is None:
+        try:
+            beach_raw = fetch_json(f"http://www.qdmf.org.cn/Ajax/SeaBeach24hWave.ashx?date={target_date}&_t={timestamp_ms()}", timeout=18)
+            beach_rows = beach_raw.get("rows") or [] if isinstance(beach_raw, dict) else []
+            beach_row = beach_rows[0] if beach_rows else {}
+            water_temp = numeric_or_none(first_present(beach_row, [
+                "SB24hWFSixthBathingWaterTemperature", "SB24hWFSixthBathingWaterTemp",
+                "SB24hWFSixthBathingSeaTemp", "SB24hWFSixthBathingTemperature",
+            ]))
+        except Exception:
+            water_temp = None
+    daily_map = {}
+    for index, day in enumerate(daily.get("time") or []):
+        sunrise_values, sunset_values = daily.get("sunrise") or [], daily.get("sunset") or []
+        daily_map[day] = {
+            "sunrise": _parse_local_datetime(sunrise_values[index]) if index < len(sunrise_values) else None,
+            "sunset": _parse_local_datetime(sunset_values[index]) if index < len(sunset_values) else None,
+        }
+    now = _now()
+    base_date = datetime.datetime.strptime(target_date, "%Y-%m-%d").date()
+    start = now.replace(minute=0, second=0, microsecond=0) if base_date == now.date() else datetime.datetime.combine(base_date, datetime.time(0, tzinfo=_tz()))
+    end = start + datetime.timedelta(hours=24)
+    forecasts = []
+    weather_times = hourly.get("time") or []
+    for index, time_text in enumerate(weather_times):
+        moment = _parse_local_datetime(time_text)
+        if not moment or moment < start or moment >= end:
+            continue
+        tide_index = min(range(len(tide_points)), key=lambda idx: abs((tide_points[idx][0] - moment).total_seconds()))
+        tide_height = tide_points[tide_index][1]
+        comparison_index = tide_index + 1 if tide_index + 1 < len(tide_points) else tide_index - 1
+        tide_delta = tide_points[comparison_index][1] - tide_height
+        phase = "涨潮" if tide_delta > 0 else "退潮" if tide_delta < 0 else "平潮"
+        def hourly_value(key):
+            values = hourly.get(key) or []
+            return numeric_or_none(values[index]) if index < len(values) else None
+        weather_code = hourly_value("weather_code")
+        day_info = daily_map.get(moment.date().isoformat()) or {}
+        score, level, safety, safety_text, components = _score_fishing_hour(
+            moment, tide_delta, hourly_value("wind_speed_10m"), hourly_value("wind_gusts_10m"),
+            wave_height, hourly_value("precipitation_probability"), weather_code,
+            day_info.get("sunrise"), day_info.get("sunset"),
+        )
+        forecasts.append({
+            "time": moment.isoformat(timespec="minutes"), "score": score, "level": level,
+            "safety": safety, "safety_text": safety_text, "phase": phase,
+            "tide_height_cm": round(tide_height), "tide_change_cm_h": round(abs(tide_delta)),
+            "wind_kmh": hourly_value("wind_speed_10m"), "gust_kmh": hourly_value("wind_gusts_10m"),
+            "wave_height_m": wave_height, "precipitation_probability": hourly_value("precipitation_probability"),
+            "temperature_c": hourly_value("temperature_2m"),
+            "weather": weather_code_text(int(weather_code)) if weather_code is not None else "--", "components": components,
+        })
+    if not forecasts:
+        raise ValueError("未来24小时预报数据不足")
+    eligible = sorted(
+        [item for item in forecasts if item["score"] >= 65 and item["safety"] == "normal"],
+        key=lambda item: (-item["score"], item["time"]),
+    )
+    windows = []
+    chosen_times = []
+    for candidate in eligible:
+        start_at = _parse_local_datetime(candidate["time"])
+        if any(abs((start_at - chosen).total_seconds()) < 3 * 3600 for chosen in chosen_times):
+            continue
+        chosen_times.append(start_at)
+        end_at = min(start_at + datetime.timedelta(hours=2), end)
+        windows.append({
+            "start": start_at.isoformat(timespec="minutes"), "end": end_at.isoformat(timespec="minutes"),
+            "score": candidate["score"], "level": candidate["level"],
+            "reason": f"{candidate['phase']}，潮位变化约{candidate['tide_change_cm_h']}cm/h，风速{round(candidate['wind_kmh'] or 0)}km/h",
+        })
+        if len(windows) >= 3:
+            break
+    best = max(forecasts, key=lambda item: item["score"])
+    return {
+        "score": best["score"], "level": best["level"], "best_hour": best["time"], "best_snapshot": best,
+        "windows": windows[:3], "forecast_hours": len(forecasts), "water_temp_c": water_temp,
+        "wave_available": wave_height is not None, "warning": best["safety_text"],
+        "method_note": "岸钓辅助评分，不代表鱼获保证；风浪或雷暴风险会强制降分。",
+        "sources": ["Open-Meteo", "全球潮汐预报服务平台", "青岛海洋预报"],
+        "source_time": tide_source_time, "errors": [wave_error] if wave_error else [], "method_version": 1,
     }
 
 
@@ -595,6 +959,13 @@ def _notification_tide_snapshot(tide_days, tide_date, current=None):
 
 def notification_snapshot_provider(config):
     settings = config.get("settings") or {}
+    needs_fishing = any(
+        rule.get("enabled") and any(
+            str(condition.get("field", "")).startswith("fishing.")
+            for condition in (rule.get("conditions") or {}).get("all", [])
+        )
+        for rule in (config.get("rules") or [])
+    )
     now_ts = time.time()
     today = today_ymd()
     errors = []
@@ -610,26 +981,31 @@ def notification_snapshot_provider(config):
                 notification_data_cache["tide_date"] = today
                 notification_data_cache["tide_days"] = tide_days
                 notification_data_cache["tide_fetched_at"] = now_ts
-        if now_ts - notification_data_cache["weather_fetched_at"] >= 600 or not notification_data_cache["weather"]:
-            try:
-                notification_data_cache["weather"] = _notification_fetch_weather()
-                notification_data_cache["weather_fetched_at"] = now_ts
-            except Exception as exc:
-                errors.append(f"weather={repr(exc)}")
+        _, _, weather_error = _cached_notification_weather(now_ts)
+        if weather_error is not None:
+            errors.append(f"weather={repr(weather_error)}")
         if now_ts - notification_data_cache["wave_fetched_at"] >= 900 or not notification_data_cache["wave"]:
             try:
                 notification_data_cache["wave"] = _notification_fetch_wave()
                 notification_data_cache["wave_fetched_at"] = now_ts
             except Exception as exc:
                 errors.append(f"wave={repr(exc)}")
+        if needs_fishing and (now_ts - notification_data_cache["fishing_fetched_at"] >= 1800 or not notification_data_cache["fishing"]):
+            try:
+                notification_data_cache["fishing"] = fetch_fishing_forecast(today)
+                notification_data_cache["fishing_fetched_at"] = now_ts
+            except Exception as exc:
+                errors.append(f"fishing={repr(exc)}")
         tide_days = notification_data_cache["tide_days"]
         tide_date = notification_data_cache["tide_date"]
         weather = notification_data_cache["weather"]
         wave = notification_data_cache["wave"]
+        fishing_forecast = notification_data_cache["fishing"]
         fetched_at = {
             "tide": notification_data_cache["tide_fetched_at"],
             "weather": notification_data_cache["weather_fetched_at"],
             "wave": notification_data_cache["wave_fetched_at"],
+            "fishing": notification_data_cache["fishing_fetched_at"],
         }
     max_age = numeric_or_none(settings.get("max_data_age_minutes")) or 15
     source_age_minutes = {
@@ -639,6 +1015,7 @@ def notification_snapshot_provider(config):
     tide_available = bool(tide_days) and tide_date == today
     weather_available = bool(weather) and source_age_minutes["weather"] is not None and source_age_minutes["weather"] <= max_age
     wave_available = bool(wave) and source_age_minutes["wave"] is not None and source_age_minutes["wave"] <= max_age
+    fishing_available = needs_fishing and bool(fishing_forecast) and source_age_minutes["fishing"] is not None and source_age_minutes["fishing"] <= 35
     unavailable_sources = []
     if not tide_available:
         unavailable_sources.append("tide")
@@ -646,6 +1023,8 @@ def notification_snapshot_provider(config):
         unavailable_sources.append("weather")
     if not wave_available:
         unavailable_sources.append("wave")
+    if needs_fishing and not fishing_available:
+        unavailable_sources.append("fishing")
 
     # 单个实时数据源异常时，只让依赖该数据的规则无法匹配；不要连带阻止
     # 潮汐等其他数据仍然完整的规则。过期缓存会被置空，避免误触发。
@@ -661,6 +1040,46 @@ def notification_snapshot_provider(config):
     }
     weather = weather if weather_available else {}
     wave = wave if wave_available else {"height_m": None, "raw": "--"}
+    fishing = {
+        "score": None,
+        "level": "数据不足",
+        "safety": "unknown",
+        "window_count": 0,
+        "best_time": "--",
+        "best_window": "暂无安全适宜时段",
+        "reason": "钓鱼评分数据不可用",
+        "warning": "钓鱼评分数据不可用",
+    }
+    if fishing_available:
+        best = fishing_forecast.get("best_snapshot") or {}
+        windows = fishing_forecast.get("windows") or []
+        first_window = windows[0] if windows else None
+        if first_window:
+            start_at = _parse_local_datetime(first_window.get("start"))
+            end_at = _parse_local_datetime(first_window.get("end"))
+            window_text = (
+                f"{start_at.strftime('%m-%d %H:%M')} 至 {end_at.strftime('%H:%M')}"
+                if start_at and end_at else "--"
+            )
+        else:
+            window_text = "暂无安全适宜时段"
+        best_at = _parse_local_datetime(fishing_forecast.get("best_hour"))
+        fishing = {
+            "score": fishing_forecast.get("score"),
+            "level": fishing_forecast.get("level") or "数据不足",
+            "safety": best.get("safety") or "unknown",
+            "window_count": len(windows),
+            "best_time": best_at.strftime("%m-%d %H:%M") if best_at else "--",
+            "best_window": window_text,
+            "reason": (first_window or {}).get("reason") or fishing_forecast.get("warning") or "--",
+            "warning": fishing_forecast.get("warning") or "--",
+            "phase": best.get("phase") or "--",
+            "tide_height_cm": best.get("tide_height_cm"),
+            "wind_kmh": best.get("wind_kmh"),
+            "wave_height_m": best.get("wave_height_m"),
+            "precipitation_probability": best.get("precipitation_probability"),
+            "temperature_c": best.get("temperature_c"),
+        }
     shore_degree = settings.get("shore_inward_degree")
     degree = weather.get("degree")
     realtime_ages = [
@@ -681,6 +1100,15 @@ def notification_snapshot_provider(config):
             "relation": wind_relation(degree, shore_degree) if wind_relation else "unknown",
         },
         "wave": wave,
+        "sunset": weather.get("sunset") or {
+            "score": None,
+            "level": "unknown",
+            "level_text": "数据不足",
+            "window": "outside",
+            "window_text": "非通知时段",
+            "reason": "天气预报数据不可用",
+        },
+        "fishing": fishing,
         "data": {
             # 潮汐表是按日期生效的预报数据，一天只需获取一次，不能用其下载时间
             # 判断实时天气/浪高是否过期，否则每天凌晨后都会被错误拦截。
@@ -738,6 +1166,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             "/api/cma_alarm": self.handle_cma_alarm,
             "/api/cma_alarm_detail": self.handle_cma_alarm_detail,
             "/api/weather": self.handle_weather,
+            "/api/fishing": self.handle_fishing,
             "/api/notification/status": self.handle_notification_status,
             "/api/notification/config": self.handle_notification_config,
             "/api/notification/logs": self.handle_notification_logs,
@@ -1990,6 +2419,29 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                 "wind_gusts": format_value(current.get("wind_gusts_10m"), "km/h") if is_today else format_value(daily_pick("wind_gusts_10m_max"), "km/h"),
                 "source_time": current.get("time", "--") if is_today else target_date,
             }
+            if is_today:
+                sunset_weather, sunset_fetched_at, sunset_error = _cached_notification_weather()
+                sunset_age = time.time() - sunset_fetched_at if sunset_fetched_at else None
+                if sunset_weather and sunset_age is not None and sunset_age <= 900:
+                    weather["sunset"] = sunset_weather.get("sunset")
+                else:
+                    weather["sunset"] = {
+                        "score": None,
+                        "level": "unknown",
+                        "level_text": "数据不足",
+                        "window": "outside",
+                        "window_text": "非通知时段",
+                        "reason": "晚霞多点预报暂时不可用" if sunset_error else "晚霞预报数据已过期",
+                    }
+            else:
+                weather["sunset"] = {
+                    "score": None,
+                    "level": "unknown",
+                    "level_text": "仅展示今日",
+                    "window": "outside",
+                    "window_text": "非通知时段",
+                    "reason": "晚霞评分当前仅展示今日实时预测",
+                }
             cache["weather"] = weather
             cache["refresh"]["weather"] = now_hm(target_date)
             self.write_json(json_payload(True, weather, cache["refresh"]["weather"], "实时天气数据"))
@@ -2005,6 +2457,24 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
                     cache["refresh"]["weather"] if cache["weather"] else "--",
                     "天气接口异常，展示缓存" if cache["weather"] else "天气接口异常",
                 ))
+
+    def handle_fishing(self):
+        target_date = self.query_date()
+        cached = cache.get("fishing", {}).get(target_date)
+        cached_at = cached.get("fetched_at", 0) if isinstance(cached, dict) else 0
+        try:
+            if not cached or time.time() - cached_at >= 1800:
+                result = fetch_fishing_forecast(target_date)
+                cached = {"data": result, "fetched_at": time.time(), "update_time": now_hm(target_date)}
+                cache.setdefault("fishing", {})[target_date] = cached
+                cache["refresh"].setdefault("fishing", {})[target_date] = cached["update_time"]
+            self.write_json(json_payload(True, cached["data"], cached["update_time"], "岸钓辅助评分"))
+        except Exception as exc:
+            print(f"【钓鱼评分】异常：{repr(exc)}")
+            if cached and cached.get("data"):
+                self.write_json(json_payload(False, cached["data"], cached.get("update_time", "--"), "钓鱼评分接口异常，展示缓存"))
+            else:
+                self.write_json(json_payload(False, None, "--", f"钓鱼评分暂不可用：{exc}"))
 
     def handle_page(self):
         settings_path = os.environ.get("NOTIFICATION_SETTINGS_PATH", "/notification-admin")

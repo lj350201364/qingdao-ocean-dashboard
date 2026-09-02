@@ -58,35 +58,54 @@
         </div>
         <div class="card weather-card" id="weatherCard">
           <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-          <div class="module-title">
-            <span>实时天气与风况</span>
-            <div class="module-title-meta"><small class="module-source">数据源：Open-Meteo</small><small id="weatherTime" class="update-time">更新 --</small></div>
+          <div class="module-title weather-module-title">
+            <button id="weatherModuleTitle" class="stealth-module-title" type="button" aria-controls="weatherPanel sunsetPanel" onclick="handleStealthModuleClick('weather')">实时天气与风况</button>
+            <div class="module-title-meta"><small id="weatherSource" class="module-source">数据源：Open-Meteo</small><small id="weatherTime" class="update-time">更新 --</small></div>
           </div>
-          <div class="weather-grid">
-            <div class="weather-cell">
-              <div class="weather-cell-inner">
-                <div id="weatherIcon" class="weather-icon cloudy"></div>
-                <div id="weatherText" class="weather-data-text">--</div>
+          <div class="weather-panels">
+            <div id="weatherPanel" class="weather-panel active" role="tabpanel" aria-labelledby="weatherModuleTitle">
+              <div class="weather-grid">
+                <div class="weather-cell">
+                  <div class="weather-cell-inner">
+                    <div id="weatherIcon" class="weather-icon cloudy"></div>
+                    <div id="weatherText" class="weather-data-text">--</div>
+                  </div>
+                  <div class="label">天气状况</div>
+                </div>
+                <div class="weather-cell">
+                  <div class="weather-cell-inner">
+                    <div id="windDirection" class="wind-text wind-text-big">--</div>
+                  </div>
+                  <div class="label">风向风级</div>
+                </div>
+                <div class="weather-cell">
+                  <div class="weather-cell-inner">
+                    <div id="tempRange" class="weather-data-value">--</div>
+                  </div>
+                  <div class="label">今日温度</div>
+                </div>
+                <div class="weather-cell">
+                  <div class="weather-cell-inner">
+                    <div id="humidity" class="weather-data-value">--</div>
+                  </div>
+                  <div class="label">湿度</div>
+                </div>
               </div>
-              <div class="label">天气状况</div>
             </div>
-            <div class="weather-cell">
-              <div class="weather-cell-inner">
-                <div id="windDirection" class="wind-text wind-text-big">--</div>
+            <div id="sunsetPanel" class="weather-panel sunset-panel" role="tabpanel" aria-labelledby="weatherModuleTitle" hidden>
+              <div class="sunset-summary">
+                <div class="sunset-total"><span id="sunsetScore" class="sunset-score">--</span><small>/ 100 分</small></div>
+                <div class="sunset-rating"><div id="sunsetLevelText" class="sunset-level-text">等待评分</div><div id="sunsetSuns" class="sunset-suns" role="img" aria-label="晚霞等级暂不可用"><span class="sun-token"></span><span class="sun-token"></span><span class="sun-token"></span><span class="sun-token"></span><span class="sun-token"></span></div></div>
+                <div class="sunset-timing"><span>日落 <b id="sunsetTime">--</b></span><span id="sunsetWindow">--</span></div>
               </div>
-              <div class="label">风向风级</div>
-            </div>
-            <div class="weather-cell">
-              <div class="weather-cell-inner">
-                <div id="tempRange" class="weather-data-value">--</div>
+              <div class="sunset-components">
+                <div class="sunset-component"><span>日落方向透光</span><strong id="sunsetLightScore">--<small>/35</small></strong></div>
+                <div class="sunset-component"><span>中高云幕布</span><strong id="sunsetCloudScore">--<small>/30</small></strong></div>
+                <div class="sunset-component"><span>能见度与湿度</span><strong id="sunsetAirScore">--<small>/15</small></strong></div>
+                <div class="sunset-component"><span>无降水和雾</span><strong id="sunsetRainScore">--<small>/10</small></strong></div>
+                <div class="sunset-component"><span>西侧低云趋势</span><strong id="sunsetTrendScore">--<small>/10</small></strong></div>
               </div>
-              <div class="label">今日温度</div>
-            </div>
-            <div class="weather-cell">
-              <div class="weather-cell-inner">
-                <div id="humidity" class="weather-data-value">--</div>
-              </div>
-              <div class="label">湿度</div>
+              <div id="sunsetReason" class="sunset-reason">正在读取晚霞预测依据...</div>
             </div>
           </div>
         </div>
@@ -97,14 +116,11 @@
         <div class="card map-card">
           <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
           <div class="module-title situation-title">
-            <div class="situation-tabs" role="tablist" aria-label="态势模块内容切换">
-              <button id="typhoonTab" class="situation-tab active" type="button" role="tab" aria-selected="true" aria-controls="typhoonPanel" onclick="switchSituationPanel('typhoon')">台风路径与云图</button>
-              <button id="notificationTab" class="situation-tab" type="button" role="tab" aria-selected="false" aria-controls="notificationPanel" onclick="switchSituationPanel('notifications')">钉钉通知记录 <span id="notificationCount" class="notification-count">0</span></button>
-            </div>
+            <button id="situationModuleTitle" class="stealth-module-title" type="button" aria-controls="typhoonPanel notificationPanel" onclick="handleStealthModuleClick('situation')">台风路径与云图</button>
             <div class="module-title-meta"><small id="situationSource" class="module-source">数据源：北海预报减灾中心</small><small id="situationTime" class="update-time">更新 --</small></div>
           </div>
           <div class="situation-panels">
-            <div id="typhoonPanel" class="situation-panel active" role="tabpanel" aria-labelledby="typhoonTab">
+            <div id="typhoonPanel" class="situation-panel active" role="tabpanel" aria-labelledby="situationModuleTitle">
               <div class="map-shell">
                 <iframe id="typhoonFrame" class="typhoon-frame" title="台风路径与云图" loading="eager" src="https://www.bhyb.org.cn/typhoon/"></iframe>
                 <span class="map-label n40">40°N</span>
@@ -120,7 +136,7 @@
                 </div>
               </div>
             </div>
-            <div id="notificationPanel" class="situation-panel notification-panel" role="tabpanel" aria-labelledby="notificationTab" hidden>
+            <div id="notificationPanel" class="situation-panel notification-panel" role="tabpanel" aria-labelledby="situationModuleTitle" hidden>
               <div class="notification-toolbar">
                 <span>仅展示发送成功的钉钉通知，最新记录优先</span>
                 <button id="notificationRefreshBtn" class="notification-refresh" type="button" onclick="loadNotificationLogs(true)">刷新记录</button>
@@ -140,11 +156,12 @@
       <div class="quad quad-bl">
         <div class="card tide-card" id="tideCard">
           <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-          <div class="module-title">
-            <span>海况数据</span>
-            <div class="module-title-meta"><small class="module-source" title="数据源：全球潮汐平台、青岛海洋预报台">数据源：全球潮汐 · 青岛海洋预报</small><small id="tideUpdate" class="update-time">更新 --</small></div>
+          <div class="module-title ocean-module-title">
+            <button id="oceanModuleTitle" class="stealth-module-title" type="button" aria-controls="oceanDataPanel fishingPanel" onclick="handleStealthModuleClick('ocean')">海况数据</button>
+            <div class="module-title-meta"><small id="oceanSource" class="module-source" title="数据源：全球潮汐平台、青岛海洋预报台">数据源：全球潮汐 · 青岛海洋预报</small><small id="tideUpdate" class="update-time">更新 --</small></div>
           </div>
-          <div class="ocean-data-grid">
+          <div class="ocean-panels">
+          <div id="oceanDataPanel" class="ocean-panel active ocean-data-grid" role="tabpanel" aria-labelledby="oceanModuleTitle">
             <div class="ocean-row ocean-row-top">
               <div class="ocean-cell"><div class="label">近海浪高</div><strong id="offshoreWaveHeight" class="data-value">--</strong></div>
               <div class="ocean-cell"><div class="label">浴场水温</div><strong id="beachWaterTemp" class="data-value">--</strong></div>
@@ -176,6 +193,26 @@
               <div class="ocean-cell"><div class="label">下次低潮潮高</div><strong id="nextLowLevel" class="data-value">--<small>cm</small></strong></div>
               <div class="ocean-cell"><div class="label">距下次低潮</div><strong id="lowDelta" class="data-value">--</strong></div>
             </div>
+          </div>
+          <div id="fishingPanel" class="ocean-panel fishing-panel" role="tabpanel" aria-labelledby="oceanModuleTitle" hidden>
+            <div class="fishing-summary">
+              <div class="fishing-total"><span id="fishingScore" class="fishing-score">--</span><small>/ 100 分</small></div>
+              <div class="fishing-verdict"><strong id="fishingLevel">等待评分</strong><span id="fishingBestTime">推荐时段 --</span></div>
+              <div class="fishing-snapshot"><span id="fishingPhase">潮况 --</span><span id="fishingWeather">天气 --</span></div>
+            </div>
+            <div class="fishing-components" aria-label="钓鱼评分构成">
+              <div class="fishing-component"><span>潮流活跃</span><strong id="fishingTideScore">--<small>/30</small></strong></div>
+              <div class="fishing-component"><span>风况</span><strong id="fishingWindScore">--<small>/25</small></strong></div>
+              <div class="fishing-component"><span>浪高安全</span><strong id="fishingWaveScore">--<small>/20</small></strong></div>
+              <div class="fishing-component"><span>降水雷暴</span><strong id="fishingRainScore">--<small>/15</small></strong></div>
+              <div class="fishing-component"><span>光照时段</span><strong id="fishingLightScore">--<small>/10</small></strong></div>
+            </div>
+            <div class="fishing-metrics">
+              <span>潮高 <b id="fishingTideHeight">--</b></span><span>风速 <b id="fishingWind">--</b></span><span>浪高 <b id="fishingWave">--</b></span><span>降水 <b id="fishingRain">--</b></span><span>气温/水温 <b id="fishingTemperature">--</b></span>
+            </div>
+            <div id="fishingWindows" class="fishing-windows"><div class="fishing-empty">正在计算未来24小时适宜时段...</div></div>
+            <div id="fishingWarning" class="fishing-warning">评分仅作岸钓辅助参考，请以现场警戒和风浪状况为准。</div>
+          </div>
           </div>
         </div>
       </div>

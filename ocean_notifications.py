@@ -163,6 +163,19 @@ def render_message(template, snapshot):
         "风级": "wind.level",
         "风速": "wind.speed_kmh",
         "近海浪高": "wave.height_m",
+        "晚霞评分": "sunset.score",
+        "晚霞等级": "sunset.level_text",
+        "晚霞依据": "sunset.reason",
+        "日落时间": "sunset.sunset_time",
+        "晚霞通知时段": "sunset.window_text",
+        "钓鱼评分": "fishing.score",
+        "钓鱼等级": "fishing.level",
+        "推荐钓鱼时段": "fishing.best_window",
+        "钓鱼评分依据": "fishing.reason",
+        "钓鱼安全提示": "fishing.warning",
+        "钓鱼潮况": "fishing.phase",
+        "钓鱼时段风速": "fishing.wind_kmh",
+        "钓鱼时段浪高": "fishing.wave_height_m",
     }
     def replace(match):
         path = aliases.get(match.group(1), match.group(1))
@@ -244,12 +257,15 @@ class NotificationManager:
         if not isinstance(rules, list):
             raise ValueError("规则必须是数组")
         known_operators = {"equals", "gte", "lte", "gt", "lt", "in", "not_in", "changed_to"}
+        known_deduplication = {"per_tide_segment", "per_day", "per_hour"}
         for rule in rules:
             if not isinstance(rule, dict) or not str(rule.get("id", "")).strip():
                 raise ValueError("每条规则都必须有唯一 ID")
             for condition in (rule.get("conditions") or {}).get("all", []):
                 if condition.get("operator") not in known_operators:
                     raise ValueError(f"规则 {rule.get('id')} 包含不支持的操作符")
+            if rule.get("deduplication", "per_tide_segment") not in known_deduplication:
+                raise ValueError(f"规则 {rule.get('id')} 包含不支持的去重方式")
         if len({rule["id"] for rule in rules}) != len(rules):
             raise ValueError("规则 ID 不能重复")
         incoming["settings"]["interval_seconds"] = max(30, int(incoming["settings"].get("interval_seconds", 60)))
@@ -381,7 +397,12 @@ class NotificationManager:
     def _build_event(self, rule, config, snapshot):
         dedupe = rule.get("deduplication", "per_tide_segment")
         segment_id = canonical_tide_segment(snapshot) or now_cn().strftime("%Y-%m-%d")
-        suffix = segment_id if dedupe == "per_tide_segment" else now_cn().strftime("%Y-%m-%d-%H")
+        if dedupe == "per_tide_segment":
+            suffix = segment_id
+        elif dedupe == "per_day":
+            suffix = now_cn().strftime("%Y-%m-%d")
+        else:
+            suffix = now_cn().strftime("%Y-%m-%d-%H")
         return {
             "event_key": f"{rule.get('id')}:{suffix}",
             "rule_id": rule.get("id", "unnamed"),

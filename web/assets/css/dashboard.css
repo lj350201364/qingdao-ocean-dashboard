@@ -591,6 +591,67 @@ html.page-paused *,html.page-paused *::before,html.page-paused *::after{animatio
 html.mobile .performance-btn{display:none}
 @media(max-width:760px){.performance-btn{display:none}}
 
+/* Weather and sunset-score panel switch. */
+.stealth-module-title{appearance:none;-webkit-appearance:none;display:flex;align-items:center;min-width:0;padding:0;border:0;outline:0;background:transparent;color:var(--tech-text);font:inherit;font-weight:700;letter-spacing:inherit;line-height:1.3;text-align:left;text-shadow:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default;user-select:none;-webkit-user-select:none}
+.stealth-module-title:focus-visible{outline:1px solid rgba(25,217,255,.34);outline-offset:4px;border-radius:2px}
+.stealth-module-title::-moz-focus-inner{padding:0;border:0}
+.weather-module-title{overflow:visible}
+.weather-tabs{display:flex;align-items:center;gap:4px;min-width:0;padding:2px;background:rgba(1,10,21,.72);border:1px solid rgba(99,222,255,.13);border-radius:6px}
+.weather-tab{display:inline-flex;align-items:center;justify-content:center;min-height:27px;padding:4px 10px;border:1px solid transparent;border-radius:4px;background:transparent;color:#7897a9;font-size:var(--fs-label);font-weight:700;letter-spacing:.02em;line-height:1;white-space:nowrap;cursor:pointer;transition:color .16s ease,background .16s ease,border-color .16s ease,transform .12s ease}
+.weather-tab:hover{color:var(--tech-text);background:rgba(25,217,255,.07)}
+.weather-tab:active{transform:translateY(1px)}
+.weather-tab:focus-visible{outline:2px solid var(--tech-cyan);outline-offset:2px}
+.weather-tab.active{color:#dffbff;background:rgba(25,217,255,.13);border-color:rgba(99,222,255,.28);box-shadow:inset 0 -1px 0 rgba(25,217,255,.45)}
+.weather-panels{position:relative;z-index:2;display:flex;flex:1;min-height:0}
+.weather-panel{width:100%;height:100%;min-height:0}
+.weather-panel[hidden]{display:none!important}
+.weather-panel>.weather-grid{height:100%}
+.sunset-panel{display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.sunset-summary{display:grid;grid-template-columns:1fr 1.35fr 1fr;align-items:center;gap:8px;min-height:62px;padding:8px 10px;border:1px solid rgba(255,180,70,.22);border-radius:8px;background:linear-gradient(110deg,rgba(255,153,55,.09),rgba(4,13,26,.74) 52%,rgba(25,217,255,.04))}
+.sunset-total{display:flex;align-items:baseline;gap:4px;min-width:0}
+.sunset-score{font:800 clamp(30px,2.5vw,44px)/1 Consolas,"Microsoft YaHei",sans-serif;color:#ffb347;text-shadow:0 0 16px rgba(255,157,55,.36);font-variant-numeric:tabular-nums}
+.sunset-total small{color:#a68466;font-size:clamp(10px,.7vw,12px);white-space:nowrap}
+.sunset-rating{min-width:0;text-align:center}
+.sunset-level-text{margin-bottom:5px;color:#ffd4a0;font-size:clamp(11px,.8vw,14px);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sunset-suns{display:flex;align-items:center;justify-content:center;gap:4px;min-height:21px}
+.sun-token{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;color:#59616c;opacity:.3;font-size:20px;line-height:1;transition:color .2s ease,opacity .2s ease,transform .2s ease,text-shadow .2s ease}
+.sun-token::before{content:"☀"}
+.sun-token.active{color:#ffb33f;opacity:1;transform:scale(1.04);text-shadow:0 0 7px rgba(255,177,62,.72)}
+.sunset-timing{display:flex;flex-direction:column;align-items:flex-end;gap:4px;color:#7897a9;font-size:clamp(10px,.7vw,12px);white-space:nowrap}
+.sunset-timing b{color:#c9f7ff;font-family:Consolas,"Microsoft YaHei",sans-serif}
+.sunset-components{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;flex:1;min-height:0}
+.sunset-component{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;padding:7px 5px;border:1px solid rgba(99,222,255,.12);border-radius:7px;background:rgba(3,13,26,.72)}
+.sunset-component span{max-width:100%;margin-bottom:4px;color:#7897a9;font-size:clamp(9px,.65vw,12px);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sunset-component strong{color:#bdefff;font:800 clamp(17px,1.35vw,24px)/1 Consolas,"Microsoft YaHei",sans-serif;text-shadow:0 0 9px rgba(25,217,255,.25)}
+.sunset-component strong small{margin-left:2px;color:#567787;font-size:clamp(9px,.6vw,11px)}
+.sunset-reason{flex:0 0 auto;overflow:hidden;padding:1px 3px;color:#698898;font-size:clamp(9px,.62vw,11px);line-height:1.35;white-space:nowrap;text-overflow:ellipsis}
+html.performance-lite .sun-token{transition:none!important}
+
+@media(max-width:1180px){.weather-module-title .module-title-meta .module-source{display:none}.weather-tab{padding-left:7px;padding-right:7px}.sunset-components{gap:5px}.sunset-component{padding-left:3px;padding-right:3px}}
+@media(max-width:640px){.weather-module-title{align-items:flex-start;flex-wrap:wrap;gap:6px}.weather-tabs{width:100%;order:1}.weather-tab{flex:1;padding:5px 6px;font-size:11px}.weather-module-title .module-title-meta{order:2;width:100%;justify-content:flex-end}.weather-module-title .module-title-meta .module-source{display:block;max-width:none}.sunset-summary{grid-template-columns:1fr 1.45fr;min-height:74px}.sunset-timing{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:space-between}.sunset-components{grid-template-columns:repeat(3,1fr);overflow:auto}.sunset-component:nth-child(4),.sunset-component:nth-child(5){grid-column:span 1}.sunset-reason{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2}}
+
+@media(max-width:640px){.weather-module-title,.situation-title,.ocean-module-title{align-items:center!important;flex-wrap:nowrap!important;gap:0!important;overflow:hidden}.weather-module-title .module-title-meta,.situation-title .module-title-meta,.ocean-module-title .module-title-meta{order:initial!important;width:auto!important;justify-content:flex-end}.weather-module-title .module-title-meta .module-source,.situation-title .module-title-meta .module-source,.ocean-module-title .module-title-meta .module-source{display:block;max-width:125px}}
+
+/* Ocean data and fishing-score panel switch. */
+.ocean-module-title{overflow:visible}
+.ocean-tabs{display:flex;align-items:center;gap:4px;min-width:0;padding:2px;background:rgba(1,10,21,.72);border:1px solid rgba(99,222,255,.13);border-radius:6px}
+.ocean-tab{display:inline-flex;align-items:center;justify-content:center;min-height:27px;padding:4px 10px;border:1px solid transparent;border-radius:4px;background:transparent;color:#7897a9;font-size:var(--fs-label);font-weight:700;line-height:1;white-space:nowrap;cursor:pointer;transition:color .16s ease,background .16s ease,border-color .16s ease,transform .12s ease}
+.ocean-tab:hover{color:var(--tech-text);background:rgba(25,217,255,.07)}.ocean-tab:active{transform:translateY(1px)}.ocean-tab:focus-visible{outline:2px solid var(--tech-cyan);outline-offset:2px}
+.ocean-tab.active{color:#dffbff;background:rgba(25,217,255,.13);border-color:rgba(99,222,255,.28);box-shadow:inset 0 -1px 0 rgba(25,217,255,.45)}
+.ocean-panels{position:relative;z-index:2;display:flex;flex:1;min-height:0}.ocean-panel{width:100%;height:100%;min-height:0}.ocean-panel[hidden]{display:none!important}
+.fishing-panel{display:flex;flex-direction:column;gap:7px;overflow:hidden}
+.fishing-summary{display:grid;grid-template-columns:.8fr 1.35fr 1fr;align-items:center;gap:8px;min-height:58px;padding:7px 10px;border:1px solid rgba(70,225,174,.2);border-radius:8px;background:linear-gradient(110deg,rgba(26,190,133,.09),rgba(4,13,26,.76) 52%,rgba(25,217,255,.045))}
+.fishing-total{display:flex;align-items:baseline;gap:4px}.fishing-score{color:#55e2af;font:800 clamp(30px,2.5vw,44px)/1 Consolas,"Microsoft YaHei",sans-serif;text-shadow:0 0 16px rgba(60,221,166,.3);font-variant-numeric:tabular-nums}.fishing-total small{color:#6b9587;font-size:clamp(10px,.7vw,12px);white-space:nowrap}
+.fishing-verdict{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0;text-align:center}.fishing-verdict strong{color:#c7fff0;font-size:clamp(13px,.95vw,17px)}.fishing-verdict span{max-width:100%;overflow:hidden;color:#7ea99c;font-size:clamp(10px,.68vw,12px);white-space:nowrap;text-overflow:ellipsis}
+.fishing-snapshot{display:flex;flex-direction:column;align-items:flex-end;gap:4px;color:#86a6b2;font-size:clamp(10px,.68vw,12px);white-space:nowrap}
+.fishing-components{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;min-height:54px}.fishing-component{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;padding:6px 4px;border:1px solid rgba(99,222,255,.12);border-radius:7px;background:rgba(3,13,26,.72)}.fishing-component span{max-width:100%;margin-bottom:3px;overflow:hidden;color:#7897a9;font-size:clamp(9px,.64vw,11px);font-weight:600;white-space:nowrap;text-overflow:ellipsis}.fishing-component strong{color:#bdefff;font:800 clamp(16px,1.25vw,22px)/1 Consolas,"Microsoft YaHei",sans-serif}.fishing-component small{margin-left:2px;color:#567787;font-size:clamp(8px,.55vw,10px)}
+.fishing-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;color:#668797;font-size:clamp(9px,.6vw,11px)}.fishing-metrics span{min-width:0;overflow:hidden;padding:4px 6px;border-radius:4px;background:rgba(25,217,255,.035);white-space:nowrap;text-overflow:ellipsis}.fishing-metrics b{color:#b5e9f2;font-family:Consolas,"Microsoft YaHei",sans-serif;font-weight:700}
+.fishing-windows{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;flex:1;min-height:48px}.fishing-window{display:flex;flex-direction:column;justify-content:center;min-width:0;padding:6px 8px;border:1px solid rgba(70,225,174,.16);border-radius:6px;background:rgba(19,83,68,.12)}.fishing-window strong{color:#8ef0cd;font-size:clamp(11px,.75vw,13px);font-variant-numeric:tabular-nums}.fishing-window span{margin-top:3px;overflow:hidden;color:#71998e;font-size:clamp(9px,.6vw,11px);white-space:nowrap;text-overflow:ellipsis}.fishing-empty{grid-column:1/-1;display:flex;align-items:center;justify-content:center;border:1px dashed rgba(99,222,255,.13);border-radius:6px;color:#6d8b99;font-size:clamp(10px,.68vw,12px)}
+.fishing-warning{overflow:hidden;color:#718e9b;font-size:clamp(9px,.6vw,11px);line-height:1.3;white-space:nowrap;text-overflow:ellipsis}.fishing-warning.is-danger{color:#ff9b77}
+html.performance-lite .ocean-tab{transition:none!important}
+@media(max-width:1180px){.ocean-module-title .module-title-meta .module-source{display:none}.ocean-tab{padding-left:7px;padding-right:7px}.fishing-components{gap:4px}.fishing-component{padding-left:2px;padding-right:2px}}
+@media(max-width:640px){.ocean-module-title{align-items:flex-start;flex-wrap:wrap;gap:6px}.ocean-tabs{width:100%;order:1}.ocean-tab{flex:1;padding:5px 6px;font-size:11px}.ocean-module-title .module-title-meta{order:2;width:100%;justify-content:flex-end}.ocean-module-title .module-title-meta .module-source{display:block;max-width:none}.fishing-panel{overflow:auto}.fishing-summary{grid-template-columns:.8fr 1.3fr}.fishing-snapshot{grid-column:1/-1;flex-direction:row;justify-content:space-between}.fishing-components{grid-template-columns:repeat(3,1fr)}.fishing-metrics{grid-template-columns:repeat(2,1fr)}.fishing-windows{grid-template-columns:1fr}.fishing-warning{white-space:normal}}
+
 /* Situation module tabs and sent-notification table. */
 .situation-title{overflow:visible}
 .situation-tabs{display:flex;align-items:center;gap:4px;min-width:0;padding:2px;background:rgba(1,10,21,.72);border:1px solid rgba(99,222,255,.13);border-radius:6px}

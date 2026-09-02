@@ -26,8 +26,8 @@ function cyclePerformanceMode(){
   if(tideChart){tideChart.dispose();tideChart=null;if(lastChartRaw)renderChart(lastChartRaw,"",lastChartSite);}
 }
 function runWhenVisible(fn){return function(){if(!document.hidden)fn();};}
-var dataLastRequested={tide:0,chart:0,weather:0,wave:0,offshore:0,alarms:0,typhoon:0,notifications:0};
-var dataRefreshIntervals={tide:60*60*1000,chart:6*60*60*1000,weather:10*60*1000,wave:60*60*1000,offshore:15*60*1000,alarms:5*60*1000,typhoon:60*60*1000,notifications:30*1000};
+var dataLastRequested={tide:0,chart:0,weather:0,wave:0,offshore:0,fishing:0,alarms:0,typhoon:0,notifications:0};
+var dataRefreshIntervals={tide:60*60*1000,chart:6*60*60*1000,weather:10*60*1000,wave:60*60*1000,offshore:15*60*1000,fishing:30*60*1000,alarms:5*60*1000,typhoon:60*60*1000,notifications:30*1000};
 function markDataRequest(name){dataLastRequested[name]=Date.now();}
 function dataRequestIsDue(name,now){return !dataLastRequested[name]||now-dataLastRequested[name]>=dataRefreshIntervals[name];}
 function refreshDueData(){
@@ -37,6 +37,7 @@ function refreshDueData(){
   if(dataRequestIsDue("weather",now))loadWeather();
   if(dataRequestIsDue("wave",now))loadWave();
   if(dataRequestIsDue("offshore",now))loadOffshoreWave();
+  if(dataRequestIsDue("fishing",now))loadFishing();
   if(dataRequestIsDue("alarms",now))loadCmaAlarm();
   if(dataRequestIsDue("typhoon",now))reloadTyphoonFrame();
   if(dataRequestIsDue("notifications",now))loadNotificationLogs();
@@ -48,9 +49,19 @@ function refreshDueData(){
   document.addEventListener("visibilitychange",function(){document.documentElement.classList.toggle("page-paused",document.hidden);if(!document.hidden){updateClock();refreshDueData();}});
 })();
 var tideRawData=null, tideChart=null, lastChartRaw=null, lastChartSite=null, lastChartPoints=[], lastTideList=[], resizeTimer=null, lastTideRising=null, soundEnabled=false, audioCtx=null, selectedDayOffset=0, tomorrowTideList=[], tomorrowTideReady=false;
-var activeSituationPanel="typhoon",typhoonUpdatedAt="--",notificationUpdatedAt="--";
+var activeSituationPanel="typhoon",activeWeatherPanel="weather",activeOceanPanel="ocean",typhoonUpdatedAt="--",notificationUpdatedAt="--",oceanUpdatedAt="--",fishingUpdatedAt="--";
+var stealthModuleClicks={weather:{count:0,last:0},situation:{count:0,last:0},ocean:{count:0,last:0}};
 var $=function(id){return document.getElementById(id);};
 function setText(id,text){var el=$(id); if(el) el.textContent=(text===null||text===undefined||text==="")?"--":text;}
+function handleStealthModuleClick(group){
+  var state=stealthModuleClicks[group];if(!state)return;
+  var now=Date.now();state.count=(now-state.last<=1200)?state.count+1:1;state.last=now;
+  if(state.count<5)return;
+  state.count=0;state.last=0;
+  if(group==="weather")switchWeatherPanel(activeWeatherPanel==="weather"?"sunset":"weather");
+  else if(group==="situation")switchSituationPanel(activeSituationPanel==="typhoon"?"notifications":"typhoon");
+  else if(group==="ocean")switchOceanPanel(activeOceanPanel==="ocean"?"fishing":"ocean");
+}
 function setTextWithUnit(id,val,unit){var el=$(id); if(el){var v=(val===null||val===undefined||val==="")?"--":val; el.innerHTML=v+(unit?'<small>'+unit+'</small>':'');}}
 function lunarText(d){
   try{
@@ -176,8 +187,42 @@ function switchSituationPanel(name){
   if(notificationPanel){notificationPanel.hidden=!showNotifications;notificationPanel.classList.toggle("active",showNotifications);}
   if(typhoonTab){typhoonTab.classList.toggle("active",!showNotifications);typhoonTab.setAttribute("aria-selected",showNotifications?"false":"true");}
   if(notificationTab){notificationTab.classList.toggle("active",showNotifications);notificationTab.setAttribute("aria-selected",showNotifications?"true":"false");}
+  setText("situationModuleTitle",showNotifications?"钉钉通知记录":"台风路径与云图");
+  var situationTitle=$("situationModuleTitle");if(situationTitle)situationTitle.setAttribute("aria-label","当前模块："+(showNotifications?"钉钉通知记录":"台风路径与云图"));
   updateSituationMeta();
   if(showNotifications&&dataRequestIsDue("notifications",Date.now()))loadNotificationLogs();
+}
+function switchWeatherPanel(name){
+  activeWeatherPanel=name==="sunset"?"sunset":"weather";
+  var showSunset=activeWeatherPanel==="sunset";
+  var weatherPanel=$("weatherPanel"),sunsetPanel=$("sunsetPanel");
+  var weatherTab=$("weatherTab"),sunsetTab=$("sunsetTab");
+  if(weatherPanel){weatherPanel.hidden=showSunset;weatherPanel.classList.toggle("active",!showSunset);}
+  if(sunsetPanel){sunsetPanel.hidden=!showSunset;sunsetPanel.classList.toggle("active",showSunset);}
+  if(weatherTab){weatherTab.classList.toggle("active",!showSunset);weatherTab.setAttribute("aria-selected",showSunset?"false":"true");}
+  if(sunsetTab){sunsetTab.classList.toggle("active",showSunset);sunsetTab.setAttribute("aria-selected",showSunset?"true":"false");}
+  setText("weatherModuleTitle",showSunset?"晚霞评分":"实时天气与风况");
+  var weatherTitle=$("weatherModuleTitle");if(weatherTitle)weatherTitle.setAttribute("aria-label","当前模块："+(showSunset?"晚霞评分":"实时天气与风况"));
+  setText("weatherSource",showSunset?"数据源：Open-Meteo · 西侧4点云量":"数据源：Open-Meteo");
+}
+function updateOceanMeta(){
+  var fishing=activeOceanPanel==="fishing";
+  setText("oceanSource",fishing?"数据源：潮汐 · Open-Meteo · 青岛海洋预报":"数据源：全球潮汐 · 青岛海洋预报");
+  var timeText=fishing?fishingUpdatedAt:oceanUpdatedAt;
+  setText("tideUpdate",(!fishing&&String(timeText).indexOf("状态 ")===0?"":"更新 ")+timeText);
+}
+function switchOceanPanel(name){
+  activeOceanPanel=name==="fishing"?"fishing":"ocean";
+  var showFishing=activeOceanPanel==="fishing";
+  var oceanPanel=$("oceanDataPanel"),fishingPanel=$("fishingPanel"),oceanTab=$("oceanDataTab"),fishingTab=$("fishingTab");
+  if(oceanPanel){oceanPanel.hidden=showFishing;oceanPanel.classList.toggle("active",!showFishing);}
+  if(fishingPanel){fishingPanel.hidden=!showFishing;fishingPanel.classList.toggle("active",showFishing);}
+  if(oceanTab){oceanTab.classList.toggle("active",!showFishing);oceanTab.setAttribute("aria-selected",showFishing?"false":"true");}
+  if(fishingTab){fishingTab.classList.toggle("active",showFishing);fishingTab.setAttribute("aria-selected",showFishing?"true":"false");}
+  setText("oceanModuleTitle",showFishing?"钓鱼评分":"海况数据");
+  var oceanTitle=$("oceanModuleTitle");if(oceanTitle)oceanTitle.setAttribute("aria-label","当前模块："+(showFishing?"钓鱼评分":"海况数据"));
+  updateOceanMeta();
+  if(showFishing&&dataRequestIsDue("fishing",Date.now()))loadFishing();
 }
 function formatNotificationTime(value){
   var text=String(value||"");
@@ -308,6 +353,37 @@ function renderWeather(obj,updateTime){
   setText("windDirection",windText);
   var windDegree=parseWindDegree(obj&&obj.wind_direction_degree);
   var needle=$("windNeedle"); if(needle&&windDegree!==null) needle.style.transform="rotate("+windDegree+"deg)";
+  renderSunsetScore(obj&&obj.sunset);
+}
+function sunsetSunLevel(score){
+  if(score>=85)return 5;
+  if(score>=70)return 4;
+  if(score>=45)return 3;
+  if(score>=25)return 2;
+  return score>=0?1:0;
+}
+function setSunsetComponent(id,value,maxValue){
+  var el=$(id),valid=value!==null&&value!==undefined&&!isNaN(Number(value));
+  if(el)el.innerHTML=(valid?Math.round(Number(value)):"--")+"<small>/"+maxValue+"</small>";
+}
+function renderSunsetScore(sunset){
+  sunset=sunset||{};
+  var score=Number(sunset.score),available=sunset.score!==null&&sunset.score!==undefined&&!isNaN(score);
+  setText("sunsetScore",available?Math.round(score):"--");
+  var level=available?sunsetSunLevel(score):0;
+  setText("sunsetLevelText",available?(sunset.level_text||"已评分")+" · "+level+"级小太阳":(sunset.level_text||"数据不足"));
+  setText("sunsetTime",sunset.sunset_time||"--");
+  setText("sunsetWindow",sunset.window_text||"--");
+  setText("sunsetReason",sunset.reason||"晚霞预测数据暂不可用");
+  var components=sunset.components||{};
+  setSunsetComponent("sunsetLightScore",components.light_corridor,35);
+  setSunsetComponent("sunsetCloudScore",components.cloud_canvas,30);
+  setSunsetComponent("sunsetAirScore",components.transparency,15);
+  setSunsetComponent("sunsetRainScore",components.precipitation,10);
+  setSunsetComponent("sunsetTrendScore",components.cloud_trend,10);
+  var suns=$("sunsetSuns"),tokens=suns?suns.querySelectorAll(".sun-token"):[];
+  for(var i=0;i<tokens.length;i++)tokens[i].classList.toggle("active",i<level);
+  if(suns)suns.setAttribute("aria-label",available?"晚霞等级"+level+"颗小太阳，共5颗":"晚霞等级暂不可用");
 }
 // 计算紫外线指数（基于天气、季节和时间估算）
 function estimateUVIndex(){
@@ -351,6 +427,37 @@ function renderWave(obj,updateTime){
   if(obj&&obj.water_temp){setText("beachWaterTemp",obj.water_temp);}
   if(!obj||!obj.water_temp){setText("beachWaterTemp","--");}
 }
+function fishingTimeParts(value){
+  var match=String(value||"").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if(!match)return {date:"--",time:"--",full:"--"};
+  var today=new Date(),same=Number(match[2])===today.getMonth()+1&&Number(match[3])===today.getDate();
+  return {date:same?"今日":match[2]+"-"+match[3],time:match[4]+":"+match[5],full:match[2]+"-"+match[3]+" "+match[4]+":"+match[5]};
+}
+function setFishingComponent(id,value,max){
+  var el=$(id);if(!el)return;el.textContent=value===null||value===undefined?"--":String(value);
+  var small=document.createElement("small");small.textContent="/"+max;el.appendChild(small);
+}
+function renderFishing(obj,updateTime){
+  if(!obj)return;
+  fishingUpdatedAt=updateTime||"--";if(activeOceanPanel==="fishing")updateOceanMeta();
+  var best=obj.best_snapshot||{},components=best.components||{},bestTime=fishingTimeParts(obj.best_hour);
+  setText("fishingScore",obj.score);setText("fishingLevel",obj.level||"数据不足");
+  setText("fishingBestTime","最佳 "+bestTime.date+" "+bestTime.time);
+  setText("fishingPhase",(best.phase||"潮况 --")+(best.tide_change_cm_h!==undefined?" · "+best.tide_change_cm_h+"cm/h":""));
+  setText("fishingWeather",(best.weather||"天气 --")+(best.temperature_c!==null&&best.temperature_c!==undefined?" · "+best.temperature_c+"℃":""));
+  setFishingComponent("fishingTideScore",components.tide,30);setFishingComponent("fishingWindScore",components.wind,25);setFishingComponent("fishingWaveScore",components.wave,20);setFishingComponent("fishingRainScore",components.rain,15);setFishingComponent("fishingLightScore",components.light,10);
+  setText("fishingTideHeight",best.tide_height_cm===undefined?"--":best.tide_height_cm+"cm");
+  setText("fishingWind",best.wind_kmh===null||best.wind_kmh===undefined?"--":best.wind_kmh+"km/h");
+  setText("fishingWave",best.wave_height_m===null||best.wave_height_m===undefined?"缺失":best.wave_height_m+"m");
+  setText("fishingRain",best.precipitation_probability===null||best.precipitation_probability===undefined?"--":best.precipitation_probability+"%");
+  var air=best.temperature_c===null||best.temperature_c===undefined?"--":best.temperature_c+"℃",water=obj.water_temp_c===null||obj.water_temp_c===undefined?"--":obj.water_temp_c+"℃";
+  setText("fishingTemperature",air+" / "+water);
+  var windows=$("fishingWindows");if(windows){windows.textContent="";var items=Array.isArray(obj.windows)?obj.windows:[];
+    if(!items.length){var empty=document.createElement("div");empty.className="fishing-empty";empty.textContent="未来24小时暂无安全且评分达65分的连续时段";windows.appendChild(empty);}
+    else{items.forEach(function(item){var start=fishingTimeParts(item.start),end=fishingTimeParts(item.end),card=document.createElement("div"),title=document.createElement("strong"),reason=document.createElement("span");card.className="fishing-window";title.textContent=start.date+" "+start.time+"–"+end.time+" · "+item.score+"分";reason.textContent=item.reason||item.level||"适合";card.appendChild(title);card.appendChild(reason);windows.appendChild(card);});}
+  }
+  var warning=$("fishingWarning");if(warning){warning.textContent=(obj.warning||"")+" · "+(obj.method_note||"");warning.classList.toggle("is-danger",best.safety!=="normal");}
+}
 function tideCurrentStatus(){
   var now=new Date();
   var hm=now.getHours()*60+now.getMinutes();
@@ -369,7 +476,7 @@ function tideCurrentStatus(){
   return (next.type==="满潮"?"涨潮中→":"落潮中→")+next.type;
 }
 function renderTide(res,upTime){
-  tideRawData=res; setText("tideUpdate","更新 "+(upTime||"--")); setText("globalUpdate","数据更新 "+(upTime||"--"));
+  tideRawData=res;oceanUpdatedAt=upTime||"--";if(activeOceanPanel==="ocean")updateOceanMeta();setText("globalUpdate","数据更新 "+(upTime||"--"));
   if(!res||!res.data||!Array.isArray(res.data.rows)){ return; }
   var item=res.data.rows[0]; if(!item){ return;}
   var list=[
@@ -400,7 +507,7 @@ function calcTideStatus(list){
   var now=new Date(), nowMin=selectedDayOffset===0 ? now.getHours()*60+now.getMinutes() : 0;
   if(selectedDayOffset===0){
     var statusTime=String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0")+" "+String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
-    setText("tideUpdate","状态 "+statusTime);
+    oceanUpdatedAt="状态 "+statusTime;if(activeOceanPanel==="ocean"){setText("tideUpdate",oceanUpdatedAt);}
   }
   var pts=list.map(function(x){return {min:timeToMin(x.t),height:Number(x.l),type:x.type,time:formatHHMM(x.t)};}).filter(function(p){return p.min!==null&&!isNaN(p.height);}).sort(function(a,b){return a.min-b.min;});
   if(pts.length<2){setText("tideBadge","数据不足");return;}
@@ -680,6 +787,7 @@ function showWeatherUnavailable(){
   setAllText(["tempRange","humidity","windDirection"],"未知");
   setText("weatherTime","暂无明日数据"); setText("weatherText","未知");
   var icon=$("weatherIcon"); if(icon) icon.className="weather-icon";
+  renderSunsetScore({level_text:"仅展示今日",reason:"晚霞评分当前仅展示今日实时预测"});
 }
 function showWaveUnavailable(){
   setText("offshoreWaveHeight","--");
@@ -717,6 +825,15 @@ function loadOffshoreWave(){markDataRequest("offshore");fetchJSON(apiUrl("/api/o
   }
   setOffshoreWaveState(r.data.wave_height||"--",false,"青岛近海浪高");
 });}
+function loadFishing(){
+  markDataRequest("fishing");
+  fetchJSON(apiUrl("/api/fishing"),30000,function(e,r){
+    if(r&&r.data){renderFishing(r.data,r.updateTime);return;}
+    fishingUpdatedAt="失败";if(activeOceanPanel==="fishing")updateOceanMeta();
+    var windows=$("fishingWindows");if(windows){windows.innerHTML='<div class="fishing-empty">钓鱼评分暂不可用，请稍后重试</div>';}
+    var warning=$("fishingWarning");if(warning){warning.textContent=(r&&r.msg)||"无法连接钓鱼评分接口";warning.classList.add("is-danger");}
+  });
+}
 function loadAlarm(){fetchJSON(apiUrl("/api/alarm"),20000,function(e,r){});}
 // 统一格式化预警时间为 YYYY-MM-DD HH:MM
 function formatAlarmTime(t){
@@ -959,7 +1076,7 @@ function loadChart(){markDataRequest("chart");fetchJSON(apiUrl("/api/tideChart")
 function refreshAllData(){
   var btn=$("refreshBtn");
   if(btn){btn.disabled=true;btn.classList.add("is-loading");btn.textContent="↻ 刷新中";}
-  loadTide();loadChart();loadWeather();loadWave();loadOffshoreWave();loadCmaAlarm();loadNotificationLogs(true);
+  loadTide();loadChart();loadWeather();loadWave();loadOffshoreWave();loadFishing();loadCmaAlarm();loadNotificationLogs(true);
   setTimeout(function(){
     reloadTyphoonFrame();
     if(btn)btn.textContent="✓ 已更新";
@@ -977,8 +1094,8 @@ function boot(){
   updateDayButtons();
   markDataRequest("typhoon");
   var typhoonNow=new Date();typhoonUpdatedAt=String(typhoonNow.getHours()).padStart(2,"0")+":"+String(typhoonNow.getMinutes()).padStart(2,"0");updateSituationMeta();
-  loadTide(); loadChart(); loadWeather(); loadWave(); loadOffshoreWave(); loadCmaAlarm(); loadNotificationLogs(true);
-  setInterval(runWhenVisible(loadTide),dataRefreshIntervals.tide); setInterval(runWhenVisible(loadChart),dataRefreshIntervals.chart); setInterval(runWhenVisible(loadWeather),dataRefreshIntervals.weather); setInterval(runWhenVisible(loadWave),dataRefreshIntervals.wave); setInterval(runWhenVisible(loadOffshoreWave),dataRefreshIntervals.offshore); setInterval(runWhenVisible(loadCmaAlarm),dataRefreshIntervals.alarms); setInterval(runWhenVisible(reloadTyphoonFrame),dataRefreshIntervals.typhoon); setInterval(runWhenVisible(loadNotificationLogs),dataRefreshIntervals.notifications);
+  loadTide(); loadChart(); loadWeather(); loadWave(); loadOffshoreWave(); loadFishing(); loadCmaAlarm(); loadNotificationLogs(true);
+  setInterval(runWhenVisible(loadTide),dataRefreshIntervals.tide); setInterval(runWhenVisible(loadChart),dataRefreshIntervals.chart); setInterval(runWhenVisible(loadWeather),dataRefreshIntervals.weather); setInterval(runWhenVisible(loadWave),dataRefreshIntervals.wave); setInterval(runWhenVisible(loadOffshoreWave),dataRefreshIntervals.offshore); setInterval(runWhenVisible(loadFishing),dataRefreshIntervals.fishing); setInterval(runWhenVisible(loadCmaAlarm),dataRefreshIntervals.alarms); setInterval(runWhenVisible(reloadTyphoonFrame),dataRefreshIntervals.typhoon); setInterval(runWhenVisible(loadNotificationLogs),dataRefreshIntervals.notifications);
   setInterval(runWhenVisible(function(){if(lastTideList.length)calcTideStatus(lastTideList);}),60*1000);
   setTimeout(function(){if(lastChartRaw)renderChart(lastChartRaw,"",lastChartSite);},1000);
 }
