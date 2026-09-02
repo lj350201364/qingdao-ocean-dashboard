@@ -1153,6 +1153,18 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         query = urllib.parse.parse_qs(parsed.query)
         return (query.get(name) or [""])[0]
 
+    def notification_admin_authorized(self):
+        admin_token = os.environ.get("NOTIFICATION_ADMIN_TOKEN", "")
+        supplied_token = self.headers.get("X-Notification-Admin-Token", "")
+        is_local = self.client_address[0] in ("127.0.0.1", "::1")
+        return hmac.compare_digest(admin_token, supplied_token) if admin_token else is_local
+
+    def require_notification_admin(self, message="管理密码不正确，操作被拒绝"):
+        if self.notification_admin_authorized():
+            return True
+        self.write_json(json_payload(False, None, "--", message), status=403)
+        return False
+
     def do_GET(self):
         path = urllib.parse.urlparse(self.path).path
         routes = {
@@ -1190,15 +1202,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path
-        admin_token = os.environ.get("NOTIFICATION_ADMIN_TOKEN", "")
-        supplied_token = self.headers.get("X-Notification-Admin-Token", "")
-        is_local = self.client_address[0] in ("127.0.0.1", "::1")
-        if admin_token:
-            authorized = hmac.compare_digest(admin_token, supplied_token)
-        else:
-            authorized = is_local
-        if not authorized:
-            self.write_json(json_payload(False, None, "--", "管理令牌不正确，设置操作被拒绝"), status=403)
+        if not self.require_notification_admin():
             return
         if notification_manager is None:
             self.write_json(json_payload(False, None, "--", "通知引擎未加载"), status=503)
@@ -1215,6 +1219,13 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             if path == "/api/notification/test":
                 data = notification_manager.send_test(str(body.get("role", "")))
                 self.write_json(json_payload(True, data, now_hm(), "测试消息已发送"))
+                return
+            if path == "/api/notification/logs/delete":
+                event_id = int(body.get("id", 0))
+                if not notification_manager.delete_log(event_id):
+                    self.write_json(json_payload(False, None, "--", "通知记录不存在或已删除"), status=404)
+                    return
+                self.write_json(json_payload(True, {"id": event_id}, now_hm(), "通知记录已删除"))
                 return
             self.write_json(json_payload(False, None, "--", "接口不存在"), status=404)
         except Exception as exc:
@@ -1236,6 +1247,8 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             self.write_json(json_payload(False, None, "--", f"读取通知配置失败：{exc}"), status=500)
 
     def handle_notification_logs(self):
+        if not self.require_notification_admin("管理密码不正确，无法查看通知记录"):
+            return
         if notification_manager is None:
             self.write_json(json_payload(False, None, "--", "通知引擎未加载"), status=503)
             return

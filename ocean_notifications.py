@@ -323,6 +323,9 @@ class NotificationManager:
                 CREATE INDEX IF NOT EXISTS idx_notification_events_status_sent_at
                 ON notification_events(status, sent_at DESC, id DESC)
             """)
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(notification_events)").fetchall()}
+            if "deleted_at" not in columns:
+                conn.execute("ALTER TABLE notification_events ADD COLUMN deleted_at TEXT")
 
     def load_config(self):
         with open(self.config_path, "r", encoding="utf-8") as handle:
@@ -536,8 +539,19 @@ class NotificationManager:
     def logs(self, limit=50):
         limit = max(1, min(200, int(limit)))
         with contextlib.closing(self._connect()) as conn, conn:
-            rows = conn.execute("SELECT * FROM notification_events ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+            rows = conn.execute("SELECT * FROM notification_events WHERE deleted_at IS NULL ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [dict(row) for row in rows]
+
+    def delete_log(self, event_id):
+        event_id = int(event_id)
+        if event_id <= 0:
+            raise ValueError("通知记录 ID 无效")
+        with contextlib.closing(self._connect()) as conn, conn:
+            cursor = conn.execute(
+                "UPDATE notification_events SET deleted_at=? WHERE id=? AND deleted_at IS NULL",
+                (now_cn().isoformat(timespec="seconds"), event_id),
+            )
+        return cursor.rowcount > 0
 
     def public_logs(self, limit=30):
         """返回大屏可展示的已发送通知，不暴露快照、错误和通道配置。"""
@@ -549,7 +563,7 @@ class NotificationManager:
                 """
                 SELECT rule_name,roles,message,status,created_at,sent_at
                 FROM notification_events
-                WHERE status='sent'
+                WHERE status='sent' AND deleted_at IS NULL
                 ORDER BY sent_at DESC,id DESC
                 LIMIT ?
                 """,
