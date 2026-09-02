@@ -697,8 +697,14 @@ function parseChartPoints(rawArr){
   return points;
 }
 function adaptiveChartFont(base,min,max){var scale=Math.min(window.innerWidth/1280,window.innerHeight/760);return Math.max(min,Math.min(max,Math.round(base*scale*1.4)));}
+function chartAxisLabelInterval(pointCount,chartWidth,isMobileView){
+  if(!isMobileView)return 2;
+  var usableWidth=Math.max(220,(chartWidth||window.innerWidth)-60);
+  var maxLabels=Math.max(5,Math.floor(usableWidth/46));
+  return Math.max(3,Math.ceil(pointCount/maxLabels)-1);
+}
 function initChart(){
-  if(typeof echarts==="undefined")return false; if(!tideChart){tideChart=echarts.init($("tideChart"),null,{devicePixelRatio:isLitePerformance()?1:Math.min(window.devicePixelRatio||1,2)}); window.addEventListener("resize",function(){clearTimeout(resizeTimer);resizeTimer=setTimeout(function(){if(tideChart)tideChart.resize();},180);},{passive:true});}
+  if(typeof echarts==="undefined")return false; if(!tideChart){tideChart=echarts.init($("tideChart"),null,{devicePixelRatio:isLitePerformance()?1:Math.min(window.devicePixelRatio||1,2)}); window.addEventListener("resize",function(){clearTimeout(resizeTimer);resizeTimer=setTimeout(function(){if(tideChart){tideChart.resize();if(lastChartRaw)renderChart(lastChartRaw,"",lastChartSite);}},180);},{passive:true});}
   return true;
 }
 function renderChart(rawArr,msg,site){
@@ -712,6 +718,7 @@ function renderChart(rawArr,msg,site){
   var maxVal=Math.max.apply(null,points.map(function(p){return p.value;}));
   var isMobileView=document.documentElement.classList.contains("mobile");
   var gridLeft=isMobileView?30:52, gridRight=isMobileView?30:52, gridTop=isMobileView?36:48, gridBottom=isMobileView?32:40;
+  var xLabelInterval=chartAxisLabelInterval(points.length,$("tideChart").clientWidth,isMobileView);
   var litePerformance=isLitePerformance();
   var markData=points.filter(function(p){return p.pointType==="extrema";}).map(function(p){var isHigh=p.extremaType==="满潮";return {name:p.extremaType,coord:[p.label,p.value],value:p.value,labelText:p.extremaType+" "+p.label+"\n"+p.value+"cm",itemStyle:{color:isHigh?"#ff5252":"#00e676",shadowBlur:litePerformance?0:8,shadowColor:isHigh?"rgba(255,82,82,.6)":"rgba(0,230,118,.6)"},label:{formatter:function(params){return params.data.labelText;},color:isHigh?"#ff5252":"#00e676",fontSize:markFont,fontWeight:"bold",lineHeight:markFont+1,position:"right",distance:4,offset:[0,-14],textShadowColor:"rgba(0,0,0,.85)",textShadowBlur:litePerformance?0:4,textShadowOffsetX:0,textShadowOffsetY:1}};});
   tideChart.setOption({
@@ -719,7 +726,7 @@ function renderChart(rawArr,msg,site){
     backgroundColor:"transparent",
     tooltip:{trigger:"axis",formatter:function(p){return "时间："+p[0].axisValue+"<br>潮高："+p[0].value+" cm";},backgroundColor:"rgba(15,21,40,.94)",borderColor:"rgba(0,229,255,.35)",textStyle:{color:"#e8eaf6",fontSize:axisFont}},
     grid:{left:gridLeft,right:gridRight,top:gridTop,bottom:gridBottom,containLabel:true},
-    xAxis:{type:"category",data:points.map(function(p){return p.label;}),axisLabel:{rotate:0,interval:2,fontSize:axisFont,margin:6,color:"rgba(232,234,246,.75)",textShadowColor:"rgba(0,0,0,.7)",textShadowBlur:4,textShadowOffsetX:0,textShadowOffsetY:1},axisLine:{lineStyle:{color:"rgba(0,229,255,.28)"}},axisTick:{lineStyle:{color:"rgba(0,229,255,.22)"}}},
+    xAxis:{type:"category",data:points.map(function(p){return p.label;}),axisLabel:{rotate:0,interval:xLabelInterval,hideOverlap:true,showMinLabel:true,showMaxLabel:true,fontSize:axisFont,margin:6,color:"rgba(232,234,246,.75)",textShadowColor:"rgba(0,0,0,.7)",textShadowBlur:4,textShadowOffsetX:0,textShadowOffsetY:1},axisLine:{lineStyle:{color:"rgba(0,229,255,.28)"}},axisTick:{lineStyle:{color:"rgba(0,229,255,.22)"}}},
     yAxis:{name:"潮高(cm)",type:"value",max:Math.ceil((maxVal+35)/50)*50,nameTextStyle:{fontSize:nameFont,color:"rgba(232,234,246,.75)",textShadowColor:"rgba(0,0,0,.7)",textShadowBlur:4,textShadowOffsetX:0,textShadowOffsetY:1},axisLabel:{fontSize:axisFont,color:"rgba(232,234,246,.75)",textShadowColor:"rgba(0,0,0,.7)",textShadowBlur:4,textShadowOffsetX:0,textShadowOffsetY:1},axisLine:{lineStyle:{color:"rgba(0,229,255,.28)"}},splitLine:{lineStyle:{color:"rgba(255,255,255,.07)"}}},
     series:[{name:"潮高",type:"line",data:points.map(function(p){return p.value;}),smooth:!litePerformance,symbolSize:litePerformance?4:6,itemStyle:{color:"#00e5ff",shadowBlur:litePerformance?0:8,shadowColor:"rgba(0,229,255,.5)"},lineStyle:{color:"#00e5ff",width:3,shadowBlur:litePerformance?0:10,shadowColor:"rgba(0,229,255,.55)"},areaStyle:{color:{type:"linear",colorStops:[{offset:0,color:"rgba(0,229,255,.28)"},{offset:1,color:"rgba(0,229,255,.03)"}]}},markPoint:{symbol:"circle",symbolSize:litePerformance?18:24,data:markData},markLine:{symbol:"none",silent:true,data:[],lineStyle:{color:"#ffab00",width:2,type:"solid",shadowBlur:litePerformance?0:8,shadowColor:"rgba(255,171,0,.6)"},label:{show:true,formatter:"现在",color:"#ffab00",fontSize:markFont,fontWeight:"bold",position:"end",distance:[4,0],backgroundColor:"rgba(6,10,20,.85)",padding:[3,8,3,8],borderRadius:3,textShadowColor:"rgba(0,0,0,.85)",textShadowBlur:litePerformance?0:4,textShadowOffsetX:0,textShadowOffsetY:1}}}]
   },true);
@@ -1083,6 +1090,32 @@ function refreshAllData(){
     setTimeout(function(){if(btn){btn.textContent="↻ 刷新";btn.disabled=false;btn.classList.remove("is-loading");}},1200);
   },2000);
 }
+function closeMobileSourceTooltips(exceptControl){
+  document.querySelectorAll(".source-tooltip-control.is-open").forEach(function(control){
+    if(control===exceptControl)return;
+    control.classList.remove("is-open");
+    var button=control.querySelector(".source-tooltip-button");
+    if(button)button.setAttribute("aria-expanded","false");
+  });
+}
+function initMobileSourceTooltips(){
+  document.querySelectorAll(".module-title-meta .module-source").forEach(function(source,index){
+    if(source.nextElementSibling&&source.nextElementSibling.classList.contains("source-tooltip-control"))return;
+    var control=document.createElement("span"),button=document.createElement("button"),tooltip=document.createElement("span");
+    control.className="source-tooltip-control";
+    button.className="source-tooltip-button";button.type="button";button.textContent="!";
+    button.setAttribute("aria-label","查看数据源");button.setAttribute("aria-expanded","false");
+    tooltip.className="source-tooltip";tooltip.id="sourceTooltip"+index;tooltip.setAttribute("role","tooltip");
+    button.setAttribute("aria-describedby",tooltip.id);
+    button.addEventListener("click",function(event){
+      event.stopPropagation();var willOpen=!control.classList.contains("is-open");closeMobileSourceTooltips(control);
+      tooltip.textContent=source.textContent.trim()||"数据源暂未提供";control.classList.toggle("is-open",willOpen);button.setAttribute("aria-expanded",willOpen?"true":"false");
+    });
+    control.appendChild(button);control.appendChild(tooltip);source.insertAdjacentElement("afterend",control);
+  });
+  document.addEventListener("click",function(){closeMobileSourceTooltips();});
+  document.addEventListener("keydown",function(event){if(event.key==="Escape")closeMobileSourceTooltips();});
+}
 function boot(){
   // 检测 User-Agent 判断是否移动端
   var ua=navigator.userAgent||"";
@@ -1090,6 +1123,7 @@ function boot(){
   // Android 平板（无 Mobile 标记）通过屏幕尺寸辅助判断
   if(!isMobile&&/Android/i.test(ua)){isMobile=Math.max(screen.width,screen.height)<1080;}
   if(isMobile){document.documentElement.className+=" mobile";}
+  initMobileSourceTooltips();
   updatePerformanceButton();updateClock(); setInterval(runWhenVisible(updateClock),1000);
   updateDayButtons();
   markDataRequest("typhoon");

@@ -300,7 +300,7 @@ body{
 .extra-box{position:relative;overflow:hidden;min-width:0;border-radius:9px;padding:4px 8px;background:rgba(6,10,20,.72);border:1px solid rgba(255,255,255,.08);}
 .extra-box .label{font-size:var(--fs-label);color:rgba(232,234,246,.78);font-weight:600;margin-bottom:0;line-height:1.35;}
 .extra-box .value{position:relative;z-index:1;font-size:var(--fs-value);color:#00e5ff;font-weight:800;text-shadow:0 0 8px rgba(0,229,255,.32);white-space:nowrap;animation:dataPulse 5.2s ease-in-out infinite;}
-.map-shell{position:relative;z-index:2;height:calc(100% - 42px);border-radius:8px;overflow:hidden;border:1px solid rgba(0,229,255,.14);background:#060a14;}
+.map-card{display:flex;flex-direction:column}.map-shell{position:relative;z-index:2;height:calc(100% - 42px);border-radius:8px;overflow:hidden;border:1px solid rgba(0,229,255,.14);background:#060a14;}
 .map-shell::before{content:"";position:absolute;z-index:3;left:50%;top:50%;width:120%;height:120%;transform-origin:0 0;pointer-events:none;background:conic-gradient(from 0deg,rgba(0,229,255,.18),rgba(0,229,255,.04) 22deg,transparent 54deg,transparent 360deg);animation:radarSweep 10s linear infinite;}
 .map-shell::after{content:"";position:absolute;top:0;right:0;bottom:0;left:0;z-index:3;pointer-events:none;background-image:linear-gradient(rgba(0,229,255,.026) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.026) 1px,transparent 1px);background-size:50px 50px,50px 50px;}
 .typhoon-frame{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;border:0;-webkit-filter:saturate(1) brightness(1) contrast(1);}
@@ -392,6 +392,11 @@ html.mobile .module-title{font-size:13px;padding-bottom:8px;margin-bottom:10px;}
 html.mobile .module-title small{font-size:11px;}
 html.mobile .module-title-meta{gap:6px;}
 html.mobile .module-title-meta .module-source{max-width:160px;}
+html.mobile .chart-card .module-title{flex-wrap:nowrap;gap:6px}
+html.mobile .chart-card #chartTitle{flex:0 0 auto;white-space:nowrap;font-size:12px;letter-spacing:.08em}
+html.mobile .chart-card .module-title-meta{flex:1;gap:0;min-width:0}
+html.mobile .chart-card .source-tooltip-control{margin-left:auto}
+html.mobile .chart-card .module-title-meta .update-time{margin-left:6px;font-size:10px}
 html.mobile .cma-alarm-bar-source{display:none;}
 html.mobile .metric .label{font-size:12px;}
 html.mobile .metric strong{font-size:15px;}
@@ -662,10 +667,9 @@ html.performance-lite .ocean-tab{transition:none!important}
 .situation-tab.active{color:#dffbff;background:rgba(25,217,255,.13);border-color:rgba(99,222,255,.28);box-shadow:inset 0 -1px 0 rgba(25,217,255,.45)}
 .notification-count{display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:18px;padding:0 5px;border-radius:4px;background:rgba(25,217,255,.1);color:#8beeff;font:700 10px/1 Consolas,"Microsoft YaHei",sans-serif}
 .situation-tab.active .notification-count{background:rgba(25,217,255,.2);color:#e7fcff}
-.situation-panels{position:relative;z-index:2;height:calc(100% - 42px);min-height:0}
-.situation-panel{height:100%;min-height:0}
+.situation-panels{position:relative;z-index:2;display:flex;flex:1;flex-direction:column;height:auto;min-height:0}.situation-panel{flex:1;height:auto;min-height:0}
 .situation-panel[hidden]{display:none!important}
-.map-card .situation-panel>.map-shell{height:100%}
+.map-card #typhoonPanel{display:flex;flex-direction:column}.map-card .situation-panel>.map-shell{flex:1;height:auto}
 .notification-panel{display:flex;flex-direction:column;border:1px solid rgba(99,222,255,.16);border-radius:7px;background:linear-gradient(180deg,rgba(2,11,24,.92),rgba(3,13,27,.8));overflow:hidden}
 .notification-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:34px;padding:5px 9px;border-bottom:1px solid rgba(99,222,255,.12);color:#718fa0;font-size:clamp(10px,.7vw,12px);line-height:1.25}
 .notification-refresh{flex:0 0 auto;min-height:24px;padding:3px 9px;border:1px solid rgba(99,222,255,.2);border-radius:4px;background:rgba(25,217,255,.055);color:#8adff0;font-size:clamp(10px,.7vw,12px);font-weight:700;cursor:pointer;transition:color .16s ease,background .16s ease,border-color .16s ease,transform .12s ease}
@@ -692,6 +696,16 @@ html.performance-lite .ocean-tab{transition:none!important}
   .situation-title .module-title-meta .module-source{display:none}
   .situation-tab{padding-left:8px;padding-right:8px}
 }
+
+.source-tooltip-control{position:relative;display:none;flex:0 0 auto;letter-spacing:0;text-transform:none}
+.source-tooltip-button{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;padding:0;border:1px solid rgba(99,222,255,.42);border-radius:50%;background:rgba(25,217,255,.09);color:#86efff;font:800 12px/1 Consolas,sans-serif;box-shadow:inset 0 0 8px rgba(25,217,255,.08);cursor:pointer}
+.source-tooltip-button:focus-visible{outline:2px solid #19d9ff;outline-offset:2px}
+.source-tooltip{position:absolute;z-index:40;display:none;top:calc(100% + 8px);right:-4px;width:max-content;max-width:min(270px,calc(100vw - 48px));padding:8px 10px;border:1px solid rgba(99,222,255,.28);border-radius:7px;background:rgba(2,15,29,.97);color:#c3eaf2;font:500 11px/1.45 "Microsoft YaHei",sans-serif;letter-spacing:0;white-space:normal;text-align:left;text-transform:none;box-shadow:0 10px 28px rgba(0,0,0,.45),inset 0 0 18px rgba(25,217,255,.045)}
+.source-tooltip::before{content:"";position:absolute;right:8px;top:-5px;width:8px;height:8px;border-left:1px solid rgba(99,222,255,.28);border-top:1px solid rgba(99,222,255,.28);background:rgba(2,15,29,.97);transform:rotate(45deg)}
+.source-tooltip-control.is-open .source-tooltip{display:block}
+html.mobile .module-title{z-index:20;overflow:visible}
+html.mobile .module-title-meta .module-source{display:none!important}
+html.mobile .source-tooltip-control{display:inline-flex}
 @media(max-width:640px){
   html.mobile .map-card{min-height:500px}
   .situation-title{align-items:flex-start;flex-wrap:wrap;gap:6px}
@@ -699,7 +713,7 @@ html.performance-lite .ocean-tab{transition:none!important}
   .situation-tab{flex:1;padding:5px 7px;font-size:11px}
   .situation-title .module-title-meta{order:2;width:100%;justify-content:flex-end}
   .situation-title .module-title-meta .module-source{display:block;max-width:none}
-  .situation-panels{height:calc(100% - 72px)}
+  .situation-panels{height:auto}
   .notification-toolbar{align-items:flex-start;font-size:10px}
   .notification-table thead{display:none}
   .notification-table,.notification-table tbody{display:block;width:100%}
