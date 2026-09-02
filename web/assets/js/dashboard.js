@@ -49,7 +49,7 @@ function refreshDueData(){
   document.addEventListener("visibilitychange",function(){document.documentElement.classList.toggle("page-paused",document.hidden);if(!document.hidden){updateClock();refreshDueData();}});
 })();
 var tideRawData=null, tideChart=null, lastChartRaw=null, lastChartSite=null, lastChartPoints=[], lastTideList=[], resizeTimer=null, lastTideRising=null, soundEnabled=false, audioCtx=null, selectedDayOffset=0, tomorrowTideList=[], tomorrowTideReady=false;
-var activeSituationPanel="typhoon",activeWeatherPanel="weather",activeOceanPanel="ocean",typhoonUpdatedAt="--",notificationUpdatedAt="--",oceanUpdatedAt="--",fishingUpdatedAt="--";
+var activeSituationPanel="typhoon",activeWeatherPanel="weather",activeOceanPanel="ocean",typhoonUpdatedAt="--",notificationUpdatedAt="--",oceanUpdatedAt="--",fishingUpdatedAt="--",notificationLogItems=[],notificationRuleFilter="";
 var stealthModuleClicks={weather:{count:0,last:0},situation:{count:0,last:0},ocean:{count:0,last:0}};
 var $=function(id){return document.getElementById(id);};
 function setText(id,text){var el=$(id); if(el) el.textContent=(text===null||text===undefined||text==="")?"--":text;}
@@ -237,13 +237,27 @@ function renderNotificationState(message,stateClass){
   cell.colSpan=4;cell.className="notification-state "+(stateClass||"");cell.textContent=message;
   row.appendChild(cell);body.appendChild(row);
 }
-function renderNotificationLogs(items){
+function notificationRuleName(item){return String(item&&item.rule_name||"未命名规则").trim()||"未命名规则";}
+function updateNotificationRuleFilters(){
+  var names=[];notificationLogItems.forEach(function(item){var name=notificationRuleName(item);if(names.indexOf(name)<0)names.push(name);});
+  names.sort(function(a,b){return a.localeCompare(b,"zh-CN");});
+  if(notificationRuleFilter&&names.indexOf(notificationRuleFilter)<0)notificationRuleFilter="";
+  [$("notificationRuleFilter"),$("notificationRuleFilterMobile")].forEach(function(select){
+    if(!select)return;select.textContent="";var all=document.createElement("option");all.value="";all.textContent="全部规则";select.appendChild(all);
+    names.forEach(function(name){var option=document.createElement("option");option.value=name;option.textContent=name;select.appendChild(option);});select.value=notificationRuleFilter;
+  });
+}
+function setNotificationRuleFilter(value){
+  notificationRuleFilter=String(value||"");
+  [$("notificationRuleFilter"),$("notificationRuleFilterMobile")].forEach(function(select){if(select)select.value=notificationRuleFilter;});
+  renderNotificationLogs();
+}
+function renderNotificationLogs(){
   var body=$("notificationTableBody");
   if(!body)return;
-  var rows=Array.isArray(items)?items.slice():[];
-  rows.sort(function(a,b){return String(b.sent_at||"").localeCompare(String(a.sent_at||""));});
-  setText("notificationCount",String(rows.length));
-  if(!rows.length){renderNotificationState("暂无已发送通知，规则成功触发后会显示在这里","is-empty");return;}
+  var rows=notificationLogItems.filter(function(item){return !notificationRuleFilter||notificationRuleName(item)===notificationRuleFilter;});
+  setText("notificationCount",String(rows.length));setText("notificationFilterSummary",notificationRuleFilter?rows.length+" / "+notificationLogItems.length+" 条":notificationLogItems.length+" 条");
+  if(!rows.length){renderNotificationState(notificationLogItems.length?"当前规则下暂无通知记录":"暂无已发送通知，规则成功触发后会显示在这里","is-empty");return;}
   body.textContent="";
   rows.forEach(function(item){
     var row=document.createElement("tr");
@@ -251,7 +265,7 @@ function renderNotificationLogs(items){
     var time=formatNotificationTime(item.sent_at);
     timeCell.className="notification-time";timeCell.dataset.label="发送时间";timeCell.textContent=time.short;timeCell.title=time.full;
     ruleCell.className="notification-rule";ruleCell.dataset.label="通知规则";
-    var ruleName=document.createElement("strong");ruleName.textContent=item.rule_name||"未命名规则";ruleCell.appendChild(ruleName);
+    var ruleName=document.createElement("strong");ruleName.textContent=notificationRuleName(item);ruleCell.appendChild(ruleName);
     roleCell.className="notification-roles";roleCell.dataset.label="通知角色";
     var roles=Array.isArray(item.role_names)?item.role_names:[];
     if(!roles.length){roleCell.textContent="--";}else{roles.forEach(function(role){var tag=document.createElement("span");tag.className="notification-role";tag.textContent=role;roleCell.appendChild(tag);});}
@@ -261,6 +275,11 @@ function renderNotificationLogs(items){
     row.appendChild(timeCell);row.appendChild(ruleCell);row.appendChild(roleCell);row.appendChild(messageCell);body.appendChild(row);
   });
 }
+function setNotificationLogs(items){
+  notificationLogItems=Array.isArray(items)?items.slice():[];
+  notificationLogItems.sort(function(a,b){return String(b.sent_at||"").localeCompare(String(a.sent_at||""));});
+  updateNotificationRuleFilters();renderNotificationLogs();
+}
 function loadNotificationLogs(force){
   if(!force&&!dataRequestIsDue("notifications",Date.now()))return;
   markDataRequest("notifications");
@@ -269,7 +288,7 @@ function loadNotificationLogs(force){
   fetchJSON("/api/notification/public-logs?limit=30",10000,function(e,r){
     if(btn){btn.disabled=false;btn.textContent="刷新记录";}
     if(e||!r||!r.success||!Array.isArray(r.data)){renderNotificationState("通知记录暂时无法读取，请稍后重试","is-error");return;}
-    notificationUpdatedAt=r.updateTime||"--";updateSituationMeta();renderNotificationLogs(r.data);
+    notificationUpdatedAt=r.updateTime||"--";updateSituationMeta();setNotificationLogs(r.data);
   });
 }
 function formatHHMM(s){

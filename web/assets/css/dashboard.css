@@ -672,6 +672,7 @@ html.performance-lite .ocean-tab{transition:none!important}
 .map-card #typhoonPanel{display:flex;flex-direction:column}.map-card .situation-panel>.map-shell{flex:1;height:auto}
 .notification-panel{display:flex;flex-direction:column;border:1px solid rgba(99,222,255,.16);border-radius:7px;background:linear-gradient(180deg,rgba(2,11,24,.92),rgba(3,13,27,.8));overflow:hidden}
 .notification-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:34px;padding:5px 9px;border-bottom:1px solid rgba(99,222,255,.12);color:#718fa0;font-size:clamp(10px,.7vw,12px);line-height:1.25}
+.notification-toolbar-actions{display:flex;align-items:center;gap:6px;min-width:0}.notification-filter-summary{flex:0 0 auto;color:#6f9aaa;font:600 10px/1 Consolas,"Microsoft YaHei",sans-serif;white-space:nowrap}.notification-mobile-filter{display:none}
 .notification-refresh{flex:0 0 auto;min-height:24px;padding:3px 9px;border:1px solid rgba(99,222,255,.2);border-radius:4px;background:rgba(25,217,255,.055);color:#8adff0;font-size:clamp(10px,.7vw,12px);font-weight:700;cursor:pointer;transition:color .16s ease,background .16s ease,border-color .16s ease,transform .12s ease}
 .notification-refresh:hover{color:#e8fcff;background:rgba(25,217,255,.11);border-color:rgba(99,222,255,.36)}
 .notification-refresh:active{transform:translateY(1px)}
@@ -680,6 +681,7 @@ html.performance-lite .ocean-tab{transition:none!important}
 .notification-table{width:100%;height:auto;table-layout:fixed;border-collapse:collapse;background:transparent}
 .notification-table th,.notification-table td{border:0;border-bottom:1px solid rgba(99,222,255,.09);padding:7px 9px;text-align:left;font-size:clamp(10px,.72vw,13px);line-height:1.35;vertical-align:middle}
 .notification-table th{position:sticky;top:0;z-index:2;height:30px;background:#07182a;color:#79cfe0;font-weight:700;letter-spacing:.03em;box-shadow:0 1px 0 rgba(99,222,255,.12)}
+.notification-rule-header label{display:flex;align-items:center;gap:6px;min-width:0}.notification-rule-header label>span{flex:0 0 auto}.notification-rule-header select,.notification-mobile-filter select{min-width:0;height:24px;padding:2px 22px 2px 7px;border:1px solid rgba(99,222,255,.2);border-radius:4px;outline:0;background:#092036;color:#a9deea;font:600 10px/1.2 "Microsoft YaHei",sans-serif;cursor:pointer}.notification-rule-header select{flex:1;width:100%}.notification-rule-header select:focus,.notification-mobile-filter select:focus{border-color:#19d9ff;box-shadow:0 0 0 2px rgba(25,217,255,.12)}
 .notification-table th:nth-child(1){width:112px}.notification-table th:nth-child(2){width:24%}.notification-table th:nth-child(3){width:19%}
 .notification-table tr{animation:none!important;background:transparent;transition:background .15s ease}
 .notification-table tbody tr:hover{background:rgba(25,217,255,.045)}
@@ -714,7 +716,7 @@ html.mobile .source-tooltip-control{display:inline-flex}
   .situation-title .module-title-meta{order:2;width:100%;justify-content:flex-end}
   .situation-title .module-title-meta .module-source{display:block;max-width:none}
   .situation-panels{height:auto}
-  .notification-toolbar{align-items:flex-start;font-size:10px}
+  .notification-toolbar{align-items:flex-start;font-size:10px}.notification-toolbar>span:first-child{display:none}.notification-toolbar-actions{width:100%;justify-content:flex-end}.notification-mobile-filter{display:flex;align-items:center;gap:5px;min-width:0;margin-right:auto;color:#668b9a}.notification-mobile-filter>span{flex:0 0 auto;white-space:nowrap}.notification-mobile-filter select{width:min(180px,45vw)}
   .notification-table thead{display:none}
   .notification-table,.notification-table tbody{display:block;width:100%}
   .notification-table tbody tr{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin:7px;padding:8px;border:1px solid rgba(99,222,255,.11);border-radius:6px;background:rgba(4,16,30,.72)}
